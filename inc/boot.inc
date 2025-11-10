@@ -32,4 +32,8 @@
     ; The DMC is the only audio channel that uses interrupts and DMA reads.
     ; (DMA is direct memory access, an automated transfer launched by the CPU.)
     stx APU_DMCFREQ
+
+;; Wait for PPU synchronization
+    WAIT_FOR_VBLANK
+    WAIT_FOR_VBLANK
 .endmacro
