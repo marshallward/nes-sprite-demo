@@ -1,3 +1,6 @@
+.ifndef ::PPU_INC
+PPU_INC = 1
+
 ; PPU control registers
 PPUCTRL = $2000
 PPUMASK = $2001
@@ -40,3 +43,5 @@ loop:
     lda value
     sta PPUMASK
 .endmacro
+
+.endif

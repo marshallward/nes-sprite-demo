@@ -1,2 +1,7 @@
+.ifndef ::APU_INC
+APU_INC = 1
+
 APU_DMCFREQ = $1040
 APU_FRAMECNT = $4017
+
+.endif
