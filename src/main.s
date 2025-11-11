@@ -6,6 +6,7 @@
 
 ; Sprite positions
 .segment "ZEROPAGE"
+    frame: .res 1
     pos_x: .res 1
     pos_y: .res 1
 
@@ -23,7 +24,7 @@ reset:
     SET_PPUADDR $3f00
 
     ; Write color to PPUDATA, which writes to $3f00
-    lda #$18
+    lda #$2c
     sta PPUDATA
 
     ; Enable background rendering
@@ -35,41 +36,62 @@ reset:
     lda PPUSTATUS
     SET_PPUADDR $3410
 
-    lda #$1d
+    lda #$21
     sta PPUDATA
-    lda #$30
+    lda #$23
+    sta PPUDATA
+    lda #$25
     sta PPUDATA
     lda #$27
     sta PPUDATA
-    lda #$16
-    sta PPUDATA
 
-    ; approx position (124, 116)
-    lda #116    ; Y
+
+    ; Setup the Object Attribute Memory (OAM) buffer
+
+    ; Y position
+    lda #116
     sta $0200
     sta pos_y
-    lda #0      ; tile 0
+
+    ; Tile 0, Palette 0, disable flip, move to front
+    lda #0
     sta $0201
-    lda #0      ; palette 0, no flip, to front
     sta $0202
-    lda #124    ; X
+
+    ; X position
+    lda #124
     sta $0203
     sta pos_x
 
-    ; DMA to OAM
+
+    ; Trigger DMA (direct memory addressing) to OAM (object attribute memory)
     lda #$00
     sta OAMADDR
     lda #$02
-    sta $4014   ; OAMDMA
+    sta OAMDMA
 
     ; Re-enable NMI
     lda #%10000000
     sta $2000
 
+    ; The NMI now runs when bit7 of PPUSTATUS is set.
+
+    ; Now that NMI is enabled, do not check PPUSTATUS, and do not use
+    ; WAIT_FOR_VBLANK.  It will unset bit7 and cause the NMI skipping.
+
     ; enable sprites
     SET_PPUMASK #%00010000
 
 main:
+    ; Wait for vblank NMI to complete (defined below)
+@wait:
+    lda frame
+    beq @wait
+    ; Unset the frame draw flag
+    lda #0
+    sta frame
+
+    ; Read controller
     jsr read_joypad1
 
 ;;; cut and paste!
@@ -93,16 +115,17 @@ main:
     beq :+
     dec pos_y
 :
-    ; write updated X/Y into OAM buffer
+
+    ; Update positions in OAM buffer
     lda pos_y
     sta $0200
     lda pos_x
     sta $0203
-:
+;:
 ;;; end cut and paste!
 
     ; Wait for NMI
-    WAIT_FOR_VBLANK
+    ;WAIT_FOR_VBLANK
 
     jmp main
 
@@ -110,11 +133,15 @@ main:
 ; Interrupts (return to program)
 
 nmi:
-    ; Trigger DMA transfer during vblank
+    ; Update sprite position with DMA
     lda #$00
     sta OAMADDR
     lda #$02
-    sta $4014   ; OAMDMA
+    sta OAMDMA
+    lda #$01
+
+    ; Set the frame drawn flag
+    sta frame
 
     rti
 

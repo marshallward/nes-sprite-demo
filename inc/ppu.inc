@@ -8,6 +8,7 @@ PPUSTATUS = $2002
 OAMADDR = $2003
 PPUADDR = $2006
 PPUDATA = $2007
+OAMDMA = $4014
 
 
 ; Loop until the start of a vertical blank (vblank).
