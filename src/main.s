@@ -82,6 +82,10 @@ reset:
     ; enable sprites
     SET_PPUMASK #%00010000
 
+    ; Initialize frame flag
+    lda #$00
+    sta frame
+
 main:
     ; Wait for vblank NMI to complete (defined below)
 @wait:

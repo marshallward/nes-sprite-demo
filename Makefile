@@ -10,7 +10,7 @@ GENHEADER=tools/genheader.sh
 CONFIG=$(CFG)/nrom128.cfg
 PRG=$(BUILD)/prg.bin
 CHR=$(BUILD)/chr.bin
-NES=$(BUILD)/main.nes
+NES=$(BUILD)/sprite.nes
 
 all: $(NES)
 

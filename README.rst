@@ -1,8 +1,10 @@
-Minimal NES ROM ca65 example
-============================
+Minimal NES ca65 sprite example
+===============================
 
-This is a minimal "green screen" NES ROM build.  It does a clean reboot of the
-NES and then displays a green background.
+A basic example which draws a square in the middle of the screen, and is moved
+around by the controller.  Very Atari 2600!
+
+This is also an example of how to read the controller.
 
 To build the ROM:
 
@@ -12,4 +14,4 @@ To build the ROM:
 
     make
 
-The default path of the ROM is ``build/boot.nes``.
+The default path of the ROM is ``build/sprite.nes``.
