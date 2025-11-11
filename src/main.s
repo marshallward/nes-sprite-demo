@@ -17,6 +17,7 @@
 reset:
     INITIALIZE_NES
 
+
     ;; Render pink background
 
     ; Reset PPU latch and set PPU RAM address
@@ -30,7 +31,8 @@ reset:
     ; Enable background rendering
     SET_PPUMASK #%00001000
 
-    ; Render a single sprite
+
+    ;; Render a single sprite
 
     ; Set up the sprite palette
     lda PPUSTATUS
@@ -46,7 +48,7 @@ reset:
     sta PPUDATA
 
 
-    ; Setup the Object Attribute Memory (OAM) buffer
+    ;; Setup the Object Attribute Memory (OAM) buffer
 
     ; Y position
     lda #116
@@ -63,12 +65,14 @@ reset:
     sta $0203
     sta pos_x
 
-
     ; Trigger DMA (direct memory addressing) to OAM (object attribute memory)
     lda #$00
     sta OAMADDR
     lda #$02
     sta OAMDMA
+
+
+    ;; System setup
 
     ; Re-enable NMI
     lda #%10000000
@@ -86,11 +90,13 @@ reset:
     lda #$00
     sta frame
 
+
 main:
     ; Wait for vblank NMI to complete (defined below)
 @wait:
     lda frame
     beq @wait
+
     ; Unset the frame draw flag
     lda #0
     sta frame
@@ -100,25 +106,33 @@ main:
 
 ;;; cut and paste!
 
+    ; Check Right
+    lda buttons
+    and #%00000001    ; Right
+    beq @skip_right
+    inc pos_x
+@skip_right:
+
+    ; Check Left
     lda buttons
     and #%00000010    ; Left
-    beq :+
+    ; If nonzero, decrement pos_x.  Else skip ahead to next label.
+    beq @skip_left
     dec pos_x
-:   lda buttons
-    and #%00000001    ; Right
-    beq :+
-    inc pos_x
-:
+@skip_left:
+
     ; up/down
     lda buttons
     and #%00000100    ; Down
-    beq :+
+    beq @skip_up
     inc pos_y
-:   lda buttons
+@skip_up:
+
+    lda buttons
     and #%00001000    ; Up
-    beq :+
+    beq @skip_down
     dec pos_y
-:
+@skip_down:
 
     ; Update positions in OAM buffer
     lda pos_y
