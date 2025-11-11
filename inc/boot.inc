@@ -13,12 +13,7 @@
     ldx #%10000000
     stx APU_FRAMECNT
 
-    ; Initialize CPU stack pointer to 0x01ff
-    ldx #$ff
-    txs
-
-    ; Set X to zero (by overflow)
-    inx
+    ldx #$00
 
     ; PPUCTRL: Disable vblank NMI (and normalize other data)
     stx PPUCTRL
@@ -32,6 +27,11 @@
     ; The DMC is the only audio channel that uses interrupts and DMA reads.
     ; (DMA is direct memory access, an automated transfer launched by the CPU.)
     stx APU_DMCFREQ
+
+    ; Set X to $ff (by underflow)
+    dex
+    ; Initialize CPU stack pointer to 0x01ff
+    txs
 
 ;; Wait for PPU synchronization
     WAIT_FOR_VBLANK
