@@ -10,6 +10,10 @@ PPUADDR = $2006
 PPUDATA = $2007
 OAMDMA = $4014
 
+; PPU memory map
+BG_PALETTE = $3f00
+SPRITE_PALETTE = $3f10
+
 
 ; Loop until the start of a vertical blank (vblank).
 .macro WAIT_FOR_VBLANK

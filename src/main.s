@@ -17,35 +17,35 @@
 reset:
     INITIALIZE_NES
 
+    ;; Render background background
 
-    ;; Render pink background
-
-    ; Reset PPU latch and set PPU RAM address
+    ; Reset PPU latch
     lda PPUSTATUS
-    SET_PPUADDR $3f00
 
-    ; Write color to PPUDATA, which writes to $3f00
-    lda #$2c
+    ; Set the universal background color
+    SET_PPUADDR $3f10
+    lda #$0f
     sta PPUDATA
 
     ; Enable background rendering
     SET_PPUMASK #%00001000
 
-
     ;; Render a single sprite
 
     ; Set up the sprite palette
     lda PPUSTATUS
-    SET_PPUADDR $3410
+    SET_PPUADDR $3f11
 
+    ; NOTE: $3f10 is wired to $3f00
+    lda #$0c
+    sta PPUDATA
     lda #$21
     sta PPUDATA
-    lda #$23
+    lda #$32
     sta PPUDATA
-    lda #$25
-    sta PPUDATA
-    lda #$27
-    sta PPUDATA
+
+    ; enable background and sprites
+    SET_PPUMASK #%00010000
 
 
     ;; Setup the Object Attribute Memory (OAM) buffer
@@ -55,9 +55,12 @@ reset:
     sta $0200
     sta pos_y
 
-    ; Tile 0, Palette 0, disable flip, move to front
-    lda #0
+    ; Tile 0
+    lda #4
     sta $0201
+
+    ; Palette 0, disable flip, move to front
+    lda #0
     sta $0202
 
     ; X position
@@ -76,15 +79,12 @@ reset:
 
     ; Re-enable NMI
     lda #%10000000
-    sta $2000
+    sta PPUCTRL
 
     ; The NMI now runs when bit7 of PPUSTATUS is set.
 
     ; Now that NMI is enabled, do not check PPUSTATUS, and do not use
     ; WAIT_FOR_VBLANK.  It will unset bit7 and cause the NMI skipping.
-
-    ; enable sprites
-    SET_PPUMASK #%00010000
 
     ; Initialize frame flag
     lda #$00
@@ -103,8 +103,6 @@ main:
 
     ; Read controller
     jsr read_joypad1
-
-;;; cut and paste!
 
     ; Check Right
     lda buttons
@@ -139,11 +137,6 @@ main:
     sta $0200
     lda pos_x
     sta $0203
-;:
-;;; end cut and paste!
-
-    ; Wait for NMI
-    ;WAIT_FOR_VBLANK
 
     jmp main
 
