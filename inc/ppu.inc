@@ -12,7 +12,7 @@ OAMDMA = $4014
 
 ; PPU memory map
 BG_PALETTE = $3f00
-SPRITE_PALETTE = $3f10
+SPRITE_PALETTE = (BG_PALETTE + $10)
 
 
 ; Loop until the start of a vertical blank (vblank).
@@ -29,9 +29,9 @@ loop:
 
 ; Write the upper, then lower, byte of addr to PPUADDR.
 .macro SET_PPUADDR addr
-    lda #>addr
+    lda #>(addr)
     sta PPUADDR
-    lda #<addr
+    lda #<(addr)
     sta PPUADDR
 .endmacro
 
