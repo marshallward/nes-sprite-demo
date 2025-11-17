@@ -9,15 +9,19 @@
     frame: .res 1
     pos_x: .res 1
     pos_y: .res 1
-    vel_y: .res 1
-    acc_y: .res 1
+    pos_y_lo: .res 1
+    vel_y_hi: .res 1
+    vel_y_lo: .res 1
+    acc_y_hi: .res 1
+    acc_y_lo: .res 1
 
 
 ; Jump parameters (positive is downward)
-VEL_JUMP = <-12
+VEL_JUMP_LO = 0
+VEL_JUMP_HI = <-5
 G_UP_PRESS = 1
 G_UP_RELEASE = 0
-G_DOWN_MAX = 1
+G_DOWN_MAX = 32
 
 .setcpu "6502"
 .segment "CODE"
@@ -101,8 +105,10 @@ reset:
 
     ; Initialize kinematic state
     lda #0
-    sta vel_y
-    sta acc_y
+    sta vel_y_hi
+    sta vel_y_lo
+    sta acc_y_hi
+    sta acc_y_lo
 
 main:
     ;; Wait for vblank NMI to complete (defined below)
@@ -125,12 +131,14 @@ main:
     and #%00000001
     beq @skip_right
     inc pos_x
+    inc pos_x
 @skip_right:
 
     ; Check Left
     lda buttons
     and #%00000010
     beq @skip_left
+    dec pos_x
     dec pos_x
 @skip_left:
 
@@ -144,36 +152,46 @@ main:
     cmp #160
     bcc @skip_btn_b
     ; Apply the "impulse" velocity
-    lda #VEL_JUMP
-    sta vel_y
+    lda #VEL_JUMP_LO
+    sta vel_y_lo
+    lda #VEL_JUMP_HI
+    sta vel_y_hi
 @skip_btn_b:
 
 
-;;    ;; Apply acceleration
-;;    ; Fetch velocity
-;;    lda vel_y
-;;    bmi @jump_up
-;;;@jump_down:
-;;    lda #1
-;;    sta acc_y
-;;    jmp @apply_accel
-;;@jump_up:
-;;    lda #2
-;;    sta acc_y
-;;@apply_accel:
-    lda #G_DOWN_MAX
-    sta acc_y
+    ;; Apply acceleration
+    ; Fetch velocity
+    ; TODO: Check lo+hi
+    lda vel_y_hi
+    bmi @jump_up
+;@jump_down:
+    lda #60
+    sta acc_y_lo
+    jmp @apply_accel
+@jump_up:
+    lda #30
+    sta acc_y_lo
+@apply_accel:
+    ;lda #G_DOWN_MAX
+    ;sta acc_y_lo
 
-    lda vel_y
+    ; Update velocity
+    lda vel_y_lo
     clc
-    adc acc_y
-    sta vel_y
-@end_accel:
+    adc acc_y_lo
+    sta vel_y_lo
+    ; Keep the carry bit this time
+    lda vel_y_hi
+    adc acc_y_hi
+    sta vel_y_hi
 
     ; Update position
-    lda vel_y
+    lda pos_y_lo
     clc
-    adc pos_y
+    adc vel_y_lo
+    sta pos_y_lo
+    lda pos_y
+    adc vel_y_hi
     sta pos_y
 
     ; Stop if pos_y is below ground
@@ -184,8 +202,10 @@ main:
     lda #160
     sta pos_y
     lda #0
-    sta vel_y
-    sta acc_y
+    sta vel_y_lo
+    sta vel_y_hi
+    sta acc_y_lo
+    sta acc_y_hi
 @skip_ground:
 
     ;; Transfer positions to OAM buffer
