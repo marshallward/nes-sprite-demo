@@ -9,18 +9,18 @@
     frame: .res 1
     pos_x: .res 1
     pos_y: .res 1
-    bstate: .res 1
+    vel_y: .res 1
+    acc_y: .res 1
 
+
+; Jump parameters (positive is downward)
+VEL_JUMP = <-12
+G_UP_PRESS = 1
+G_UP_RELEASE = 0
+G_DOWN_MAX = 1
 
 .setcpu "6502"
 .segment "CODE"
-
-; Parabolic bounce lookup
-bounce_table:
-    .byte <-6, <-5, <-5, <-5, <-5, <-5, <-5, <-4, <-4, <-4, <-4, <-4, <-3, <-3, <-3, <-3, <-3, <-2, <-2, <-2, <-2, <-2, <-1, <-1, <-1, <-1, <-1, <0, <0, <0, <0, <0, <0, <1, <1, <1, <1, <1, <2, <2, <2, <2, <2, <3, <3, <3, <3, <3, <4, <4, <4, <4, <4, <5, <5, <5, <5, <5, <5, <6
-bounce_table_end:
-
-BOUNCE_PERIOD = bounce_table_end - bounce_table
 
 
 reset:
@@ -96,13 +96,13 @@ reset:
     ; WAIT_FOR_VBLANK.  It will unset bit7 and cause the NMI skipping.
 
     ; Initialize frame flag
-    lda #$00
+    lda #0
     sta frame
 
-    ; Lookup table counter
+    ; Initialize kinematic state
     lda #0
-    sta bstate
-
+    sta vel_y
+    sta acc_y
 
 main:
     ;; Wait for vblank NMI to complete (defined below)
@@ -115,25 +115,6 @@ main:
     sta frame
 
 
-    ;; Animate bounce
-
-    ; update position
-    ldx bstate
-    lda bounce_table, x
-    clc
-    adc pos_y
-    sta pos_y
-
-    ; Update lookup index
-    ; TODO: Fast power-of-two check?  Could set frames to 32 or 64
-    inc bstate
-    lda bstate
-    cmp #BOUNCE_PERIOD
-    bne @skip_reset
-    lda #0
-    sta bstate
-@skip_reset:
-
     ;; Update controller
 
     ; Read controller
@@ -141,25 +122,79 @@ main:
 
     ; Check Right
     lda buttons
-    and #%00000001    ; Right
+    and #%00000001
     beq @skip_right
     inc pos_x
 @skip_right:
 
     ; Check Left
     lda buttons
-    and #%00000010    ; Left
-    ; If nonzero, decrement pos_x.  Else skip ahead to next label.
+    and #%00000010
     beq @skip_left
     dec pos_x
 @skip_left:
 
-    ; Update positions in OAM buffer
+    ; Check jump
+    lda buttons
+    and #%01000000
+    beq @skip_btn_b
+    ; Don't apply if already jumping
+    ; TODO: This is a bad check!
+    lda pos_y
+    cmp #160
+    bcc @skip_btn_b
+    ; Apply the "impulse" velocity
+    lda #VEL_JUMP
+    sta vel_y
+@skip_btn_b:
+
+
+;;    ;; Apply acceleration
+;;    ; Fetch velocity
+;;    lda vel_y
+;;    bmi @jump_up
+;;;@jump_down:
+;;    lda #1
+;;    sta acc_y
+;;    jmp @apply_accel
+;;@jump_up:
+;;    lda #2
+;;    sta acc_y
+;;@apply_accel:
+    lda #G_DOWN_MAX
+    sta acc_y
+
+    lda vel_y
+    clc
+    adc acc_y
+    sta vel_y
+@end_accel:
+
+    ; Update position
+    lda vel_y
+    clc
+    adc pos_y
+    sta pos_y
+
+    ; Stop if pos_y is below ground
+    lda pos_y   ; TODO: remove this and the previous sta pos_y
+    cmp #160    ; C = pos_y <= 160
+    bcc @skip_ground
+    ; We've hit (or passed) the ground, so stop here.
+    lda #160
+    sta pos_y
+    lda #0
+    sta vel_y
+    sta acc_y
+@skip_ground:
+
+    ;; Transfer positions to OAM buffer
     lda pos_y
     sta $0200
     lda pos_x
     sta $0203
 
+    ;; Reset game loop
     jmp main
 
 
@@ -171,9 +206,9 @@ nmi:
     sta OAMADDR
     lda #$02
     sta OAMDMA
-    lda #$01
 
     ; Set the frame drawn flag
+    lda #$01
     sta frame
 
     rti
