@@ -18,10 +18,12 @@
 
 ; Jump parameters (positive is downward)
 VEL_JUMP_LO = 0
-VEL_JUMP_HI = <-5
-G_UP_PRESS = 1
-G_UP_RELEASE = 0
-G_DOWN_MAX = 32
+VEL_JUMP_HI = <-4
+;G_UP_PRESS = 1
+;G_UP_RELEASE = 0
+G_UP = 20
+;G_DOWN_MAX = 32
+G_DOWN = 60
 
 .setcpu "6502"
 .segment "CODE"
@@ -68,7 +70,7 @@ reset:
     sta $0200
     sta pos_y
 
-    ; Tile 0
+    ; Tile 4
     lda #4
     sta $0201
 
@@ -160,21 +162,20 @@ main:
 
 
     ;; Apply acceleration
+
     ; Fetch velocity
     ; TODO: Check lo+hi
     lda vel_y_hi
     bmi @jump_up
 ;@jump_down:
-    lda #60
+    lda #G_DOWN
     sta acc_y_lo
     jmp @apply_accel
 @jump_up:
-    lda #30
+    lda #G_UP
     sta acc_y_lo
-@apply_accel:
-    ;lda #G_DOWN_MAX
-    ;sta acc_y_lo
 
+@apply_accel:
     ; Update velocity
     lda vel_y_lo
     clc
