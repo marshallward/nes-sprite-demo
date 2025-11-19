@@ -15,14 +15,16 @@
     acc_y_hi: .res 1
     acc_y_lo: .res 1
 
+    ; Going to try a version which tracks many states.
+    ; After it's working, I'll reduce and consolidate.
+    jump_latch: .res 1
+
 
 ; Jump parameters (positive is downward)
-VEL_JUMP_LO = 0
+VEL_JUMP_LO = 128
 VEL_JUMP_HI = <-4
-;G_UP_PRESS = 1
-;G_UP_RELEASE = 0
-G_UP = 20
-;G_DOWN_MAX = 32
+G_UP = 40
+G_PRESS = 15
 G_DOWN = 60
 
 .setcpu "6502"
@@ -144,36 +146,104 @@ main:
     dec pos_x
 @skip_left:
 
-    ; Check jump
+    ;; Jump kinematics
+
+    ; We only start a new jump if the last jump has completed.
+    ;
+    ; The conditions for completion are
+    ; 1. We have reached the ground (y <= GROUND)
+    ;   (TODO: ground collision detection)
+    ; 2. The button has been released (buttons && $40 = 0)
+    ;
+    ; We then release the latch.
+    ; So many conditions, lets just gather them:
+    ;   - button (i.e. B is pressed)
+    ;   - y > GROUND
+    ;   - v > 0
+    ;       - are we moving up or down?
+    ;       - v = 0 is a concern: ground? top of parabola?
+    ;   - latch is set
+
+    ; Version 1: outer button test
+    ;
+    ; Button?
+    ;   latch?
+    ;     v > 0?
+    ;       g = g_press
+    ;     else
+    ;       g = g_down
+    ;   else
+    ;     v = v0
+    ; else
+    ;   y > 0?
+    ;     latch = 0
+    ;   else
+    ;     v > 0?
+    ;       g = g_up
+    ;     else
+    ;       g = g_down
+
+
+    ; Version 2: v > 0 outer
+    ;
+    ; v > 0? (up)
+    ;   button?
+    ;     g = g_press
+    ;   else
+    ;     g = g_up
+    ; else
+    ;   latch?
+    ;     g = g_down
+    ;   else
+    ;     button and y = GROUND?
+    ;       v = v0
+    ;       latch = 1
+
+    ;; Jump mechanics
+
+    ;; Apply impulse velocity and compute acceleration
+
+    ; Is velocity upward?
+    lda vel_y_hi
+    bpl @jump_down      ; minus is up!
+;@jump_up
     lda buttons
     and #%01000000
-    beq @skip_btn_b
-    ; Don't apply if already jumping
-    ; TODO: This is a bad check!
+    beq @vel_up_release
+;@vel_up_press:
+    lda #G_PRESS
+    sta acc_y_lo
+    jmp @jump_end
+@vel_up_release:
+    lda #G_UP
+    sta acc_y_lo
+    jmp @jump_end
+
+@jump_down:
+    lda #G_DOWN
+    sta acc_y_lo
+
+;@jump_start:
+    ; Do not apply impulse if latch is set
+    lda jump_latch
+    bne @jump_end
+
+    lda buttons
+    and #%01000000
+    beq @jump_end
     lda pos_y
-    cmp #160
-    bcc @skip_btn_b
-    ; Apply the "impulse" velocity
+    cmp #160    ; C = pos_y <= 160
+    bcc @jump_end   ; skip if C > 0 ; we are still falling
+    ; We're on the ground
     lda #VEL_JUMP_LO
     sta vel_y_lo
     lda #VEL_JUMP_HI
     sta vel_y_hi
-@skip_btn_b:
+    ; set the latch
+    lda #1
+    sta jump_latch
+@jump_end:
 
-
-    ;; Apply acceleration
-
-    ; Fetch velocity
-    ; TODO: Check lo+hi
-    lda vel_y_hi
-    bmi @jump_up
-;@jump_down:
-    lda #G_DOWN
-    sta acc_y_lo
-    jmp @apply_accel
-@jump_up:
-    lda #G_UP
-    sta acc_y_lo
 
 @apply_accel:
     ; Update velocity
@@ -195,11 +265,10 @@ main:
     adc vel_y_hi
     sta pos_y
 
-    ; Stop if pos_y is below ground
-    lda pos_y   ; TODO: remove this and the previous sta pos_y
-    cmp #160    ; C = pos_y <= 160
-    bcc @skip_ground
-    ; We've hit (or passed) the ground, so stop here.
+    ;; Stop if pos_y is below ground
+    lda pos_y           ; TODO: pos_y is already in A
+    cmp #160            ; C = pos_y >= 160
+    bcc @skip_ground    ; Jump if pos_y < 160 (above ground)
     lda #160
     sta pos_y
     lda #0
@@ -207,6 +276,11 @@ main:
     sta vel_y_hi
     sta acc_y_lo
     sta acc_y_hi
+    lda buttons
+    and #%01000000
+    bne @skip_ground
+    lda #0
+    sta jump_latch
 @skip_ground:
 
     ;; Transfer positions to OAM buffer
