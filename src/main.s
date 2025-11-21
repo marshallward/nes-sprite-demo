@@ -8,10 +8,9 @@
 .segment "ZEROPAGE"
     frame: .res 1
     pos_x: .res 1
-    pos_y: .res 1
-    pos_y_lo: .res 1
-    vel_y_hi: .res 1
-    vel_y_lo: .res 1
+    ; Subpixel resolution
+    pos_y: .res 2
+    vel_y: .res 2
     acc_y: .res 2
 
     ; Set during jump, disables jump start until landing.
@@ -66,9 +65,11 @@ reset:
     ;; Setup the Object Attribute Memory (OAM) buffer
 
     ; Y position
+    lda #0
+    sta pos_y
     lda #160
     sta $0200
-    sta pos_y
+    sta pos_y+1
 
     ; Tile 4
     lda #4
@@ -107,8 +108,8 @@ reset:
 
     ; Initialize kinematic state
     lda #0
-    sta vel_y_hi
-    sta vel_y_lo
+    sta vel_y
+    sta vel_y+1
     sta acc_y
     sta acc_y+1
 
@@ -202,7 +203,7 @@ main:
     ;; Apply impulse velocity and compute acceleration
 
     ; Is velocity upward?
-    lda vel_y_hi
+    lda vel_y+1
     bpl @jump_down      ; minus is up!
 ;@jump_up
     lda buttons
@@ -229,14 +230,14 @@ main:
     lda buttons
     and #%01000000
     beq @jump_end
-    lda pos_y
+    lda pos_y+1
     cmp #160    ; C = pos_y <= 160
     bcc @jump_end   ; skip if C > 0 ; we are still falling
     ; We're on the ground
     lda #VEL_JUMP_LO
-    sta vel_y_lo
+    sta vel_y
     lda #VEL_JUMP_HI
-    sta vel_y_hi
+    sta vel_y+1
     ; set the latch
     lda #1
     sta jump_latch
@@ -245,33 +246,33 @@ main:
 
 @apply_accel:
     ; Update velocity
-    lda vel_y_lo
+    lda vel_y
     clc
     adc acc_y
-    sta vel_y_lo
+    sta vel_y
     ; Keep the carry bit this time
-    lda vel_y_hi
+    lda vel_y+1
     adc acc_y+1
-    sta vel_y_hi
+    sta vel_y+1
 
     ; Update position
-    lda pos_y_lo
-    clc
-    adc vel_y_lo
-    sta pos_y_lo
     lda pos_y
-    adc vel_y_hi
+    clc
+    adc vel_y
     sta pos_y
+    lda pos_y+1
+    adc vel_y+1
+    sta pos_y+1
 
     ;; Stop if pos_y is below ground
-    lda pos_y           ; TODO: pos_y is already in A
+    lda pos_y+1         ; TODO: pos_y is already in A
     cmp #160            ; C = pos_y >= 160
     bcc @skip_ground    ; Jump if pos_y < 160 (above ground)
     lda #160
-    sta pos_y
+    sta pos_y+1
     lda #0
-    sta vel_y_lo
-    sta vel_y_hi
+    sta vel_y
+    sta vel_y+1
     sta acc_y
     sta acc_y+1
     lda buttons
@@ -282,7 +283,7 @@ main:
 @skip_ground:
 
     ;; Transfer positions to OAM buffer
-    lda pos_y
+    lda pos_y+1
     sta $0200
     lda pos_x
     sta $0203
