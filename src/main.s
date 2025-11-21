@@ -12,18 +12,16 @@
     pos_y_lo: .res 1
     vel_y_hi: .res 1
     vel_y_lo: .res 1
-    acc_y_hi: .res 1
-    acc_y_lo: .res 1
+    acc_y: .res 2
 
-    ; Going to try a version which tracks many states.
-    ; After it's working, I'll reduce and consolidate.
+    ; Set during jump, disables jump start until landing.
     jump_latch: .res 1
 
 
 ; Jump parameters (positive is downward)
 VEL_JUMP_LO = 128
 VEL_JUMP_HI = <-4
-G_UP = 40
+G_UP = 60
 G_PRESS = 15
 G_DOWN = 60
 
@@ -111,8 +109,8 @@ reset:
     lda #0
     sta vel_y_hi
     sta vel_y_lo
-    sta acc_y_hi
-    sta acc_y_lo
+    sta acc_y
+    sta acc_y+1
 
 main:
     ;; Wait for vblank NMI to complete (defined below)
@@ -212,16 +210,16 @@ main:
     beq @vel_up_release
 ;@vel_up_press:
     lda #G_PRESS
-    sta acc_y_lo
+    sta acc_y
     jmp @jump_end
 @vel_up_release:
     lda #G_UP
-    sta acc_y_lo
+    sta acc_y
     jmp @jump_end
 
 @jump_down:
     lda #G_DOWN
-    sta acc_y_lo
+    sta acc_y
 
 ;@jump_start:
     ; Do not apply impulse if latch is set
@@ -249,11 +247,11 @@ main:
     ; Update velocity
     lda vel_y_lo
     clc
-    adc acc_y_lo
+    adc acc_y
     sta vel_y_lo
     ; Keep the carry bit this time
     lda vel_y_hi
-    adc acc_y_hi
+    adc acc_y+1
     sta vel_y_hi
 
     ; Update position
@@ -274,8 +272,8 @@ main:
     lda #0
     sta vel_y_lo
     sta vel_y_hi
-    sta acc_y_lo
-    sta acc_y_hi
+    sta acc_y
+    sta acc_y+1
     lda buttons
     and #%01000000
     bne @skip_ground
