@@ -38,16 +38,10 @@ build/chr.bin:
 	dd if=/dev/zero bs=8096 count=1 >> $@ 2> /dev/null
 
 # Compile the main program
-$(BUILD)/main.o: $(SRC)/main.s $(INC)/ppu.inc $(INC)/apu.inc $(INC)/boot.inc | $(BUILD)
-	$(AS) -t none -I inc -o $@ $<
+$(BUILD)/main.o: $(INC)/ppu.inc $(INC)/apu.inc $(INC)/boot.inc
+$(BUILD)/bg.o: $(INC)/ppu.inc
 
-$(BUILD)/pad.o: $(SRC)/pad.s | $(BUILD)
-	$(AS) -t none -I inc -o $@ $<
-
-$(BUILD)/bg.o: $(SRC)/bg.s | $(BUILD)
-	$(AS) -t none -I inc -o $@ $<
-
-$(BUILD)/jump.o: $(SRC)/jump.s | $(BUILD)
+$(BUILD)/%.o: $(SRC)/%.s | $(BUILD)
 	$(AS) -t none -I inc -o $@ $<
 
 $(BUILD):
