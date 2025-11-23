@@ -3,10 +3,16 @@
 
 .importzp buttons
 .import read_joypad1
+.import init_jump
+.import update_jump
 
 ; Data
 .import render_bg
 .import bg_table
+
+; Needed by update_jump
+; (Though perhaps it should be an input?)
+.exportzp pos_y
 
 
 ; Sprite positions
@@ -15,11 +21,6 @@
     pos_x: .res 1
     ; 8.8 pixel resolution
     pos_y: .res 2
-    vel_y: .res 2
-    acc_y: .res 2
-
-    ; Set during jump, disables jump start until landing.
-    jump_latch: .res 1
 
 
 ; Jump parameters (positive is downward)
@@ -101,18 +102,15 @@ reset:
     SET_PPUMASK #%00011000
 
 
-    ;; Jump setup
+    ;; Game setup
 
     ; Initialize frame flag
     lda #0
     sta frame
 
     ; Initialize kinematic state
-    lda #0
-    sta vel_y
-    sta vel_y+1
-    sta acc_y
-    sta acc_y+1
+    ; This is only needed because we don't pass vel_y and acc_y!
+    jsr init_jump
 
 main:
     ;; Wait for vblank NMI to complete (defined below)
@@ -146,142 +144,7 @@ main:
     dec pos_x
 @skip_left:
 
-    ;; Jump kinematics
-
-    ; We only start a new jump if the last jump has completed.
-    ;
-    ; The conditions for completion are
-    ; 1. We have reached the ground (y <= GROUND)
-    ;   (TODO: ground collision detection)
-    ; 2. The button has been released (buttons && $40 = 0)
-    ;
-    ; We then release the latch.
-    ; So many conditions, lets just gather them:
-    ;   - button (i.e. B is pressed)
-    ;   - y > GROUND
-    ;   - v > 0
-    ;       - are we moving up or down?
-    ;       - v = 0 is a concern: ground? top of parabola?
-    ;   - latch is set
-
-    ; Version 1: outer button test
-    ;
-    ; Button?
-    ;   latch?
-    ;     v > 0?
-    ;       g = g_press
-    ;     else
-    ;       g = g_down
-    ;   else
-    ;     v = v0
-    ; else
-    ;   y > 0?
-    ;     latch = 0
-    ;   else
-    ;     v > 0?
-    ;       g = g_up
-    ;     else
-    ;       g = g_down
-
-
-    ; Version 2: v > 0 outer
-    ;
-    ; v > 0? (up)
-    ;   button?
-    ;     g = g_press
-    ;   else
-    ;     g = g_up
-    ; else
-    ;   latch?
-    ;     g = g_down
-    ;   else
-    ;     button and y = GROUND?
-    ;       v = v0
-    ;       latch = 1
-
-    ;; Jump mechanics
-
-    ;; Apply impulse velocity and compute acceleration
-
-    ; Is velocity upward?
-    lda vel_y+1
-    bpl @jump_down      ; minus is up!
-;@jump_up
-    lda buttons
-    and #%01000000
-    beq @vel_up_release
-;@vel_up_press:
-    lda #G_PRESS
-    sta acc_y
-    jmp @jump_end
-@vel_up_release:
-    lda #G_UP
-    sta acc_y
-    jmp @jump_end
-
-@jump_down:
-    lda #G_DOWN
-    sta acc_y
-
-;@jump_start:
-    ; Do not apply impulse if latch is set
-    lda jump_latch
-    bne @jump_end
-
-    lda buttons
-    and #%01000000
-    beq @jump_end
-    lda pos_y+1
-    cmp #160    ; C = pos_y <= 160
-    bcc @jump_end   ; skip if C > 0 ; we are still falling
-    ; We're on the ground
-    lda #VEL_JUMP_LO
-    sta vel_y
-    lda #VEL_JUMP_HI
-    sta vel_y+1
-    ; set the latch
-    lda #1
-    sta jump_latch
-@jump_end:
-
-
-@apply_accel:
-    ; Update velocity
-    lda vel_y
-    clc
-    adc acc_y
-    sta vel_y
-    ; Keep the carry bit this time
-    lda vel_y+1
-    adc acc_y+1
-    sta vel_y+1
-
-    ; Update position
-    lda pos_y
-    clc
-    adc vel_y
-    sta pos_y
-    lda pos_y+1
-    adc vel_y+1
-    sta pos_y+1
-
-    ;; Stop if pos_y is below ground
-    lda pos_y+1         ; TODO: pos_y is already in A
-    cmp #160            ; C = pos_y >= 160
-    bcc @skip_ground    ; Jump if pos_y < 160 (above ground)
-    lda #160
-    sta pos_y+1
-    lda #0
-    sta vel_y
-    sta vel_y+1
-    sta acc_y
-    sta acc_y+1
-    lda buttons
-    and #%01000000
-    bne @skip_ground
-    lda #0
-    sta jump_latch
-@skip_ground:
+    jsr update_jump
 
     ;; Transfer positions to OAM buffer
     lda pos_y+1
