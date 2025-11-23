@@ -24,7 +24,7 @@ $(NES): $(PRG) $(CHR)
 	cat $(CHR) >> $@
 
 # Build the PRG ROM
-$(PRG): $(BUILD)/main.o $(BUILD)/pad.o | $(BUILD) $(CONFIG)
+$(PRG): $(BUILD)/main.o $(BUILD)/pad.o $(BUILD)/bg.o | $(BUILD) $(CONFIG)
 	$(LD) -C $(CONFIG) -o $@ $^
 
 # Generate the raw CHR ROM
@@ -39,6 +39,9 @@ $(BUILD)/main.o: $(SRC)/main.s $(INC)/ppu.inc $(INC)/apu.inc $(INC)/boot.inc | $
 	$(AS) -t none -I inc -o $@ $<
 
 $(BUILD)/pad.o: $(SRC)/pad.s | $(BUILD)
+	$(AS) -t none -I inc -o $@ $<
+
+$(BUILD)/bg.o: $(SRC)/bg.s | $(BUILD)
 	$(AS) -t none -I inc -o $@ $<
 
 $(BUILD):

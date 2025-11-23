@@ -4,23 +4,9 @@
 .importzp buttons
 .import read_joypad1
 
-
-; TODO: This should be in a separate file!
-background_table:
-    ; blank
-    .repeat 32*21
-        .byte 0
-    .endrepeat
-
-    ; Ground
-    .repeat 32*1
-        .byte 5
-    .endrepeat
-
-    ; More blank
-    .repeat 32*8
-        .byte 0
-    .endrepeat
+; Data
+.import render_bg
+.import bg_table
 
 
 ; Sprite positions
@@ -35,10 +21,6 @@ background_table:
     ; Set during jump, disables jump start until landing.
     jump_latch: .res 1
 
-    ; bg table pointer
-    bg_ptr_lo: .res 1
-    bg_ptr_hi: .res 1
-
 
 ; Jump parameters (positive is downward)
 VEL_JUMP_LO = 128
@@ -50,65 +32,11 @@ G_DOWN = 60
 .setcpu "6502"
 .segment "CODE"
 
-
 reset:
     INITIALIZE_NES
 
-    ;; Render background background
-
-    ; Reset PPU latch
-    lda PPUSTATUS
-
-    ; Set the BG palette
-    SET_PPUADDR BG_PALETTE
-    lda #$0f
-    sta PPUDATA
-    lda #$0c
-    sta PPUDATA
-    lda #$21
-    sta PPUDATA
-    lda #$32
-    sta PPUDATA
-
-    ;; Create a simple background nametable
-    ;; TODO: Move to file!!
-    SET_PPUADDR $2000
-
-    ; Set up pointer
-    lda #<background_table
-    sta bg_ptr_lo
-    lda #>background_table
-    sta bg_ptr_hi
-
-    ldx #30
-bg_row_loop:
-    ldy #0
-bg_col_loop:
-    lda (bg_ptr_lo),y
-    sta PPUDATA
-    iny
-    cpy #32
-    bne bg_col_loop
-
-    ; advance pointer to next row
-    clc
-    lda bg_ptr_lo
-    adc #32
-    sta bg_ptr_lo
-    bcc :+
-    inc bg_ptr_hi
-:
-    dex
-    bne bg_row_loop
-
-    ; Set nametable attributes
-    ldx #64
-bg_attr_loop:
-    lda #0
-    sta PPUDATA
-    dex
-    bne bg_attr_loop
-
+    ; Render background background
+    jsr render_bg
 
     ;; Render a single sprite
 
