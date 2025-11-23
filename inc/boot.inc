@@ -6,7 +6,7 @@
     sei
 
     ; Disable BCD arithmetic
-    ; NOTE: The 2A03 chip has no D flag, so this does nothing.
+    ; NOTE: The NES 2A03 chip has no D flag, so this does nothing.
     ;cld
 
     ; Disable APU frame interrupts
@@ -33,7 +33,7 @@
     ; Initialize CPU stack pointer to 0x01ff
     txs
 
-;; Wait for PPU synchronization
+    ;; Wait for PPU synchronization
     WAIT_FOR_VBLANK
     WAIT_FOR_VBLANK
 .endmacro

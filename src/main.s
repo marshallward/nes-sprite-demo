@@ -29,6 +29,7 @@ G_UP = 60
 G_PRESS = 15
 G_DOWN = 60
 
+
 .setcpu "6502"
 .segment "CODE"
 

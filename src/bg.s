@@ -5,13 +5,14 @@
 
 
 .segment "ZEROPAGE"
-    ; bg table pointer
+    ; bg nametable pointer
     bg_ptr_lo: .res 1
     bg_ptr_hi: .res 1
 
 
 .segment "RODATA"
 
+; A simple nametable example
 bg_table:
     ; blank
     .repeat 32*21
@@ -29,6 +30,7 @@ bg_table:
     .endrepeat
 
 
+.setcpu "6502"
 .segment "CODE"
 
 render_bg:
@@ -83,7 +85,7 @@ render_bg:
     dex
     bne @bg_row_loop
 
-    ; Set nametable attributes (mostly just using BG0)
+    ; Set nametable attributes
     ldx #64
 @bg_attr_loop:
     lda #0
