@@ -4,17 +4,40 @@
 .importzp buttons
 .import read_joypad1
 
+
+; TODO: This should be in a separate file!
+background_table:
+    ; blank
+    .repeat 32*21
+        .byte 0
+    .endrepeat
+
+    ; Ground
+    .repeat 32*1
+        .byte 5
+    .endrepeat
+
+    ; More blank
+    .repeat 32*8
+        .byte 0
+    .endrepeat
+
+
 ; Sprite positions
 .segment "ZEROPAGE"
     frame: .res 1
     pos_x: .res 1
-    ; Subpixel resolution
+    ; 8.8 pixel resolution
     pos_y: .res 2
     vel_y: .res 2
     acc_y: .res 2
 
     ; Set during jump, disables jump start until landing.
     jump_latch: .res 1
+
+    ; bg table pointer
+    bg_ptr_lo: .res 1
+    bg_ptr_hi: .res 1
 
 
 ; Jump parameters (positive is downward)
@@ -36,21 +59,10 @@ reset:
     ; Reset PPU latch
     lda PPUSTATUS
 
-    ; Set the universal background color
+    ; Set the BG palette
     SET_PPUADDR BG_PALETTE
     lda #$0f
     sta PPUDATA
-
-    ; Enable background rendering
-    SET_PPUMASK #%00001000
-
-    ;; Render a single sprite
-
-    ; Set up the sprite palette
-    lda PPUSTATUS
-    SET_PPUADDR SPRITE_PALETTE+1
-
-    ; NOTE: $3f10 is wired to $3f00
     lda #$0c
     sta PPUDATA
     lda #$21
@@ -58,9 +70,58 @@ reset:
     lda #$32
     sta PPUDATA
 
-    ; enable background and sprites
-    SET_PPUMASK #%00010000
+    ;; Create a simple background nametable
+    ;; TODO: Move to file!!
+    SET_PPUADDR $2000
 
+    ; Set up pointer
+    lda #<background_table
+    sta bg_ptr_lo
+    lda #>background_table
+    sta bg_ptr_hi
+
+    ldx #30
+bg_row_loop:
+    ldy #0
+bg_col_loop:
+    lda (bg_ptr_lo),y
+    sta PPUDATA
+    iny
+    cpy #32
+    bne bg_col_loop
+
+    ; advance pointer to next row
+    clc
+    lda bg_ptr_lo
+    adc #32
+    sta bg_ptr_lo
+    bcc :+
+    inc bg_ptr_hi
+:
+    dex
+    bne bg_row_loop
+
+    ; Set nametable attributes
+    ldx #64
+bg_attr_loop:
+    lda #0
+    sta PPUDATA
+    dex
+    bne bg_attr_loop
+
+
+    ;; Render a single sprite
+
+    ; Set up the sprite palette
+    ; NOTE: The first color is unused
+    SET_PPUADDR SPRITE_PALETTE+1
+
+    lda #$0c
+    sta PPUDATA
+    lda #$21
+    sta PPUDATA
+    lda #$32
+    sta PPUDATA
 
     ;; Setup the Object Attribute Memory (OAM) buffer
 
@@ -93,7 +154,7 @@ reset:
 
     ;; System setup
 
-    ; Re-enable NMI
+    ; Re-enable NMI, use nametable 0
     lda #%10000000
     sta PPUCTRL
 
@@ -101,6 +162,17 @@ reset:
 
     ; Now that NMI is enabled, do not check PPUSTATUS, and do not use
     ; WAIT_FOR_VBLANK.  It will unset bit7 and cause the NMI skipping.
+
+    ; Set scroll (?)
+    lda #0
+    sta PPUSCROLL
+    sta PPUSCROLL
+
+    ; enable background and sprites
+    SET_PPUMASK #%00011000
+
+
+    ;; Jump setup
 
     ; Initialize frame flag
     lda #0
