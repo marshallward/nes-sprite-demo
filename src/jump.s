@@ -95,9 +95,27 @@ init_jump:
     ;       v = v0
     ;       latch = 1
 
+
+    ; Version 3?
+    ;
+    ; v <= 0?
+    ;   g = g_down
+    ;   if (no latch and no button and y >= 160)
+    ;     v = v0
+    ;     latch = 1
+    ; else ; v > 0
+    ;   button?
+    ;     g = g_press
+    ;   else:
+    ;     g = g_up
+    ;
+    ; @apply_accel
+    ;
+
     ;; Jump mechanics
 
     ;; Apply impulse velocity and compute acceleration
+    ; (This implements version 2, but 3 may be simpler)
 
 update_jump:
     ; Is velocity upward?
@@ -125,12 +143,14 @@ update_jump:
     lda jump_latch
     bne @jump_end
 
+    ; Latch is unset.
+    ; - If A button is pressed, apply impulse and set latch.
     lda buttons
     and #%10000000
     beq @jump_end
     lda pos_y+1
-    cmp #160    ; C = pos_y <= 160
-    bcc @jump_end   ; skip if C > 0 ; we are still falling
+    cmp #160        ; C = pos_y+1 >= 160
+    bcc @jump_end   ; skip if pos_y+1 < 160,  we are still falling
     ; We're on the ground
     lda #VEL_JUMP_LO
     sta vel_y
