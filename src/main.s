@@ -23,14 +23,6 @@
     pos_y: .res 2
 
 
-; Jump parameters (positive is downward)
-VEL_JUMP_LO = 128
-VEL_JUMP_HI = <-4
-G_UP = 60
-G_PRESS = 15
-G_DOWN = 60
-
-
 .setcpu "6502"
 .segment "CODE"
 

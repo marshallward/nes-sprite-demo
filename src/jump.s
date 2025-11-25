@@ -20,19 +20,12 @@
 
 
 ; Jump parameters (positive is downward)
-;VEL_JUMP_LO = 128
-;VEL_JUMP_HI = <-4
-;; All acceleration is sub-pixel
-;G_UP = 60
-;G_PRESS = 15
-;G_DOWN = 60
-
-;; Ninja Gaiden 1
-VEL_JUMP_LO = 0
+VEL_JUMP_LO = 128
 VEL_JUMP_HI = <-4
-G_UP = 55
-G_PRESS = 55
-G_DOWN = 55
+; All acceleration is sub-pixel
+G_UP = 60
+G_PRESS = 15
+G_DOWN = 60
 
 
 .setcpu "6502"
@@ -112,7 +105,7 @@ update_jump:
     bpl @jump_down      ; minus is up!
 ;@jump_up
     lda buttons
-    and #%01000000
+    and #%10000000
     beq @vel_up_release
 ;@vel_up_press:
     lda #G_PRESS
@@ -133,7 +126,7 @@ update_jump:
     bne @jump_end
 
     lda buttons
-    and #%01000000
+    and #%10000000
     beq @jump_end
     lda pos_y+1
     cmp #160    ; C = pos_y <= 160
@@ -181,7 +174,7 @@ update_jump:
     sta acc_y
     sta acc_y+1
     lda buttons
-    and #%01000000
+    and #%10000000
     bne @skip_ground
     lda #0
     sta jump_latch
