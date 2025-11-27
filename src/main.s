@@ -22,6 +22,9 @@
     ; 8.8 pixel resolution
     pos_y: .res 2
 
+    ; Lets try scrolling
+    scroll_x: .res 1
+
 
 .setcpu "6502"
 .segment "CODE"
@@ -85,7 +88,8 @@ reset:
     ; Now that NMI is enabled, do not check PPUSTATUS, and do not use
     ; WAIT_FOR_VBLANK.  It will unset bit7 and cause the NMI skipping.
 
-    ; Set scroll (?)
+    ; Set PPU scroll to zero
+    ; (Maybe not so important now that the NMI handles this?)
     lda #0
     sta PPUSCROLL
     sta PPUSCROLL
@@ -104,8 +108,12 @@ reset:
     ; This is only needed because we don't pass vel_y and acc_y!
     jsr init_jump
 
+    ; Initialize scrolling
+    lda #0
+    sta scroll_x
+
 main:
-    ;; Wait for vblank NMI to complete (defined below)
+    ; Wait for vblank NMI to complete (defined below)
 @wait:
     lda frame
     beq @wait
@@ -124,7 +132,13 @@ main:
     lda buttons
     and #%00000001
     beq @skip_right
-    inc pos_x
+    lda pos_x
+    cmp #192    ; C = pos_x >= 192
+    bcc @right_move
+;@right_scroll:
+    inc scroll_x
+    jmp @skip_right
+@right_move:
     inc pos_x
 @skip_right:
 
@@ -132,8 +146,14 @@ main:
     lda buttons
     and #%00000010
     beq @skip_left
+    lda pos_x
+    cmp #64 ; C = pos_x >= 64
+    bcc @left_scroll
+;@left_move
     dec pos_x
-    dec pos_x
+    jmp @skip_left
+@left_scroll:
+    dec scroll_x
 @skip_left:
 
     jsr update_jump
@@ -157,8 +177,14 @@ nmi:
     lda #$02
     sta OAMDMA
 
+    ; Update scroll
+    lda scroll_x
+    sta PPUSCROLL
+    lda #0
+    sta PPUSCROLL
+
     ; Set the frame drawn flag
-    lda #$01
+    lda #1
     sta frame
 
     rti
