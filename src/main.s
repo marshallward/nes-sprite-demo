@@ -133,7 +133,7 @@ main:
     and #%00000001
     beq @skip_right
     lda pos_x
-    cmp #192    ; C = pos_x >= 192
+    cmp #160    ; C = pos_x >= 160
     bcc @right_move
 ;@right_scroll:
     inc scroll_x
@@ -147,7 +147,7 @@ main:
     and #%00000010
     beq @skip_left
     lda pos_x
-    cmp #64 ; C = pos_x >= 64
+    cmp #96 ; C = pos_x >= 96
     bcc @left_scroll
 ;@left_move
     dec pos_x
