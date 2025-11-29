@@ -14,7 +14,7 @@
     ; 8.8 pixel resolution
     vel_y: .res 2
     acc_y: .res 2
- 
+
     ; Set during jump, disables jump start until landing.
     jump_latch: .res 1
 
@@ -38,6 +38,7 @@ init_jump:
     sta vel_y+1
     sta acc_y
     sta acc_y+1
+    sta jump_latch
     rts
 
     ;; (old jump notes.. clean up)
@@ -139,19 +140,17 @@ update_jump:
     sta acc_y
 
 ;@jump_start:
-    ; Do not apply impulse if latch is set
+    ; Do not apply impulse if latch is set.
+    ; This is also an implicit on-the-ground test.
     lda jump_latch
     bne @jump_end
 
-    ; Latch is unset.
-    ; - If A button is pressed, apply impulse and set latch.
+    ; Is the button pressed?
     lda buttons
     and #%10000000
     beq @jump_end
-    lda pos_y+1
-    cmp #160        ; C = pos_y+1 >= 160
-    bcc @jump_end   ; skip if pos_y+1 < 160,  we are still falling
-    ; We're on the ground
+ 
+    ; Latch is unset, and button is pressed.  Apply impulse velocity and latch.
     lda #VEL_JUMP_LO
     sta vel_y
     lda #VEL_JUMP_HI
