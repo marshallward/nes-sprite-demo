@@ -3,6 +3,7 @@
 ; For now take this address from main, but maybe it should be an input?
 .importzp pos_x
 .importzp pos_y
+.importzp scroll_x
 
 ; Jump management reads directly from `buttons`, but we could decouple it.
 .importzp buttons
@@ -30,7 +31,7 @@ platform_x0:
 platform_x1:
     .byte 120, 136, 255
 platform_y0:
-    .byte 180, 160, 180
+    .byte 184, 120, 184
 PLATFORM_COUNT = 3
 
 
@@ -211,7 +212,9 @@ update_jump:
     beq @skip_ground
 
     ; Skip if x < x0
+    clc
     lda pos_x
+    adc scroll_x
     cmp platform_x0, x  ; C = pos_x >= x0(p)
     bcc @end_platform_check
 

@@ -14,16 +14,18 @@
 ; (Though perhaps it should be an input?)
 .exportzp pos_x
 .exportzp pos_y
-
+.exportzp scroll_x
 
 ; Sprite positions
 .segment "ZEROPAGE"
     frame: .res 1
+
+    ; Ball position (relative to origin?  I hope so)
     pos_x: .res 1
     ; 8.8 pixel resolution
     pos_y: .res 2
 
-    ; Lets try scrolling
+    ; Map position (I think...)
     scroll_x: .res 1
 
 

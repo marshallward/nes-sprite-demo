@@ -14,18 +14,42 @@
 
 ; A simple nametable example
 bg_table:
-    ; blank
-    .repeat 32*21
+    ; All sky
+    .repeat 32*16
         .byte 0
     .endrepeat
 
-    ; Ground
-    .repeat 32*1
+    ; Top of the hill
+    .repeat 15*1
+        .byte 0
+    .endrepeat
+    .byte 5, 5
+    .repeat 15*1
+        .byte 0
+    .endrepeat
+
+    ; Hill interior
+    .repeat 7
+        .repeat 15*1
+            .byte 0
+        .endrepeat
+        .byte 2, 2
+        .repeat 15*1
+            .byte 0
+        .endrepeat
+    .endrepeat
+
+    ; Ground (184)
+    .repeat 15*1
+        .byte 5
+    .endrepeat
+    .byte 2, 2
+    .repeat 15*1
         .byte 5
     .endrepeat
 
-    ; More blank
-    .repeat 32*8
+    ; All dirt
+    .repeat 32*3
         .byte 2
     .endrepeat
 
@@ -42,7 +66,7 @@ render_bg:
     ; Universal BG color
     lda #$0f
     sta PPUDATA
-    
+
     ; BG0 palette
     lda #$1b
     sta PPUDATA
