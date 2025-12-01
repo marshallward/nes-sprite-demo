@@ -1,6 +1,7 @@
 ; Jump physics
 
 ; For now take this address from main, but maybe it should be an input?
+.importzp pos_x
 .importzp pos_y
 
 ; Jump management reads directly from `buttons`, but we could decouple it.
@@ -9,14 +10,28 @@
 .export init_jump
 .export update_jump
 
-; These three variables define "jump state", and could be passed as inputs.
+; These variables define "jump state", and could be passed as inputs.
 .segment "ZEROPAGE"
-    ; 8.8 pixel resolution
+    ; 8.8 px resolution
     vel_y: .res 2
-    acc_y: .res 2
+    ; 0.8 resolution (acc is never >= 1 px/f)
+    acc_y: .res 1
 
     ; Set during jump, disables jump start until landing.
     jump_latch: .res 1
+
+
+;; This is a temporary platform buffer.  But it could be updated as the player
+;; moves through the level.
+.segment "RODATA"
+
+platform_x0:
+    .byte 0, 120, 136
+platform_x1:
+    .byte 120, 136, 255
+platform_y0:
+    .byte 180, 160, 180
+PLATFORM_COUNT = 3
 
 
 ; Jump parameters (positive is downward)
@@ -37,7 +52,6 @@ init_jump:
     sta vel_y
     sta vel_y+1
     sta acc_y
-    sta acc_y+1
     sta jump_latch
     rts
 
@@ -142,6 +156,7 @@ update_jump:
 ;@jump_start:
     ; Do not apply impulse if latch is set.
     ; This is also an implicit on-the-ground test.
+    ; TODO: Except it doesn't account for running off a ledge!
     lda jump_latch
     bne @jump_end
 
@@ -162,41 +177,69 @@ update_jump:
 
 
 @apply_accel:
-    ; Update velocity
-    lda vel_y
+    ;; Update velocity
     clc
+    ; Subpixel
+    lda vel_y
     adc acc_y
     sta vel_y
-    ; Keep the carry bit this time
-    lda vel_y+1
-    adc acc_y+1
-    sta vel_y+1
+    ; Pixel (carry bit)
+    bcc :+
+    inc vel_y+1
+:
 
-    ; Update position
-    lda pos_y
+    ;; Update position
     clc
+    ; Subpixel
+    lda pos_y
     adc vel_y
     sta pos_y
+    ; Pixel
     lda pos_y+1
     adc vel_y+1
     sta pos_y+1
 
-    ;; Stop if pos_y is below ground
-    ;lda pos_y+1        ; NOTE: pos_y+1 is already in A
-    cmp #160            ; C = pos_y >= 160
-    bcc @skip_ground    ; Jump if pos_y < 160 (above ground)
-    lda #160
+    ; This is more generic but still dumb.
+    ; It only checks if you're below y0, so it's effectively just ground.
+    ; A more advanced method would hold pos_y(n) and pos_y(n+1) and pass that
+    ; the player passes through y0.
+    ; If we're nitpicking, it also only checks vertically.
+
+    ldx #0
+@platform_loop:
+    cpx #PLATFORM_COUNT
+    beq @skip_ground
+
+    ; Skip if x < x0
+    lda pos_x
+    cmp platform_x0, x  ; C = pos_x >= x0(p)
+    bcc @end_platform_check
+
+    ;;; Skip if x > x0
+    cmp platform_x1, x  ; C = pos_x >= x1(p)
+    bcs @end_platform_check
+
+    ; Have we gone below y0?
+    lda pos_y+1
+    cmp platform_y0, x  ; C = pos_y >= y0(p)
+    bcc @end_platform_check
+
+    lda platform_y0, x
     sta pos_y+1
     lda #0
     sta vel_y
     sta vel_y+1
     sta acc_y
-    sta acc_y+1
     lda buttons
     and #%10000000
     bne @skip_ground
     lda #0
     sta jump_latch
+@end_platform_check:
+
+    inx ; next platform
+    jmp @platform_loop
+
 @skip_ground:
 
     rts

@@ -12,6 +12,7 @@
 
 ; Needed by update_jump
 ; (Though perhaps it should be an input?)
+.exportzp pos_x
 .exportzp pos_y
 
 
