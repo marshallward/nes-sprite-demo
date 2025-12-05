@@ -18,6 +18,11 @@
     ; 0.8 resolution (acc is never >= 1 px/f)
     acc_y: .res 1
 
+    ; y_pos precompute, to check if a platform has been crossed.
+    ; NOTE: This only need to be 8.0 precision, but I could imagine moving
+    ;   platforms be defined as subpixel.
+    next_y: .res 1
+
     ; Set during jump, disables jump start until landing.
     jump_latch: .res 1
 
@@ -26,13 +31,20 @@
 ;; moves through the level.
 .segment "RODATA"
 
+;platform_x0:
+;    .byte 0, 120, 136
+;platform_x1:
+;    .byte 120, 136, 255
+;platform_y0:
+;    .byte 184, 120, 184
+;PLATFORM_COUNT = 3
 platform_x0:
-    .byte 0, 120, 136
+    .byte 0, 120
 platform_x1:
-    .byte 120, 136, 255
+    .byte 255, 136
 platform_y0:
-    .byte 184, 120, 184
-PLATFORM_COUNT = 3
+    .byte 184, 120
+PLATFORM_COUNT = 2
 
 
 ; Jump parameters (positive is downward)
@@ -56,8 +68,6 @@ init_jump:
     sta jump_latch
     rts
 
-    ;; (old jump notes.. clean up)
-
     ;; Jump kinematics
 
     ; We only start a new jump if the last jump has completed.
@@ -76,62 +86,20 @@ init_jump:
     ;       - v = 0 is a concern: ground? top of parabola?
     ;   - latch is set
 
-    ; Version 1: outer button test
+    ; Pseudocode
     ;
-    ; Button?
-    ;   latch?
-    ;     v > 0?
-    ;       g = g_press
-    ;     else
-    ;       g = g_down
-    ;   else
-    ;     v = v0
-    ; else
-    ;   y > 0?
-    ;     latch = 0
-    ;   else
-    ;     v > 0?
-    ;       g = g_up
-    ;     else
-    ;       g = g_down
-
-
-    ; Version 2: v > 0 outer
-    ;
-    ; v > 0? (up)
-    ;   button?
-    ;     g = g_press
-    ;   else
-    ;     g = g_up
-    ; else
-    ;   latch?
-    ;     g = g_down
-    ;   else
-    ;     button and y = GROUND?
-    ;       v = v0
-    ;       latch = 1
-
-
-    ; Version 3?
-    ;
-    ; v <= 0?
-    ;   g = g_down
-    ;   if (no latch and no button and y >= 160)
-    ;     v = v0
-    ;     latch = 1
-    ; else ; v > 0
-    ;   button?
+    ; v > 0:
+    ;   button:
     ;     g = g_press
     ;   else:
     ;     g = g_up
+    ; else (v <= 0):
+    ;   g = g_down
+    ;   if no latch and no button and y >= 160:
+    ;     v = v0
+    ;     latch = 1
     ;
     ; @apply_accel
-    ;
-
-    ;; Jump mechanics
-
-    ;; Apply impulse velocity and compute acceleration
-    ; (This implements version 2, but 3 may be simpler)
 
 update_jump:
     ; Is velocity upward?
@@ -142,6 +110,10 @@ update_jump:
     and #%10000000
     beq @vel_up_release
 ;@vel_up_press:
+    ; NOTE: This can create weird "floaty" effects if pressed multiple times.
+    ; You can shoot up to a state with zero velocity and low gravity, which 
+    ; can feel a bit unnatural.
+    ; TODO: We may want to "latch" this to only permit a single release.
     lda #G_PRESS
     sta acc_y
     jmp @jump_end
@@ -198,8 +170,14 @@ update_jump:
     ; Pixel
     lda pos_y+1
     adc vel_y+1
-    sta pos_y+1
-
+    ;sta pos_y+1
+    sta next_y
+    
+    ; TODO: We might be able to avoid the need for next_y!
+    ;   - We could apply the platform x-tests before computing pos_y+1
+    ;   - We could then hold next_y in A for comparison tests.
+    ;   ... or maybe not, but this seems plausible.
+    
     ; This is more generic but still dumb.
     ; It only checks if you're below y0, so it's effectively just ground.
     ; A more advanced method would hold pos_y(n) and pos_y(n+1) and pass that
@@ -218,17 +196,27 @@ update_jump:
     cmp platform_x0, x  ; C = pos_x >= x0(p)
     bcc @end_platform_check
 
-    ;;; Skip if x > x0
+    ; Skip if x > x0
     cmp platform_x1, x  ; C = pos_x >= x1(p)
     bcs @end_platform_check
 
-    ; Have we gone below y0?
+    ; Have we crossed y0?
+    ; NOTE: Load platform_y0, then only need one lda?
+
+    ; Skip if we were already below y0(p) (pos_y > y0(p))
     lda pos_y+1
     cmp platform_y0, x  ; C = pos_y >= y0(p)
+    bcs @end_platform_check
+ 
+    ; Skip if the updated y_pos is still above y0(p) (next_y < y0(p))
+    ;lda pos_y+1
+    lda next_y
+    cmp platform_y0, x  ; C = next_y >= y0(p)
     bcc @end_platform_check
 
     lda platform_y0, x
-    sta pos_y+1
+    ;sta pos_y+1
+    sta next_y
     lda #0
     sta vel_y
     sta vel_y+1
@@ -238,7 +226,11 @@ update_jump:
     bne @skip_ground
     lda #0
     sta jump_latch
+
 @end_platform_check:
+    ; Finalize y_pos
+    lda next_y
+    sta pos_y+1
 
     inx ; next platform
     jmp @platform_loop
