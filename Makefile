@@ -28,7 +28,7 @@ $(NES): $(PRG) $(CHR)
 
 # Build the PRG ROM
 $(PRG): $(OBJECTS) | $(BUILD) $(CONFIG)
-	$(LD) -C $(CONFIG) -o $@ $^
+	$(LD) --dbgfile $(BUILD)/jump.dbg -C $(CONFIG) -o $@ $^
 
 # Generate the raw CHR ROM
 # - ball.bin is an 96 B file of 6 tiles.  We append the rest with zeros.
@@ -42,7 +42,7 @@ $(BUILD)/main.o: $(INC)/ppu.inc $(INC)/apu.inc $(INC)/boot.inc
 $(BUILD)/bg.o: $(INC)/ppu.inc
 
 $(BUILD)/%.o: $(SRC)/%.s | $(BUILD)
-	$(AS) -t none -I inc -o $@ $<
+	$(AS) -g -t none -I inc -o $@ $<
 
 $(BUILD):
 	mkdir -p $(BUILD)
