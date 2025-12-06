@@ -31,13 +31,6 @@
 ;; moves through the level.
 .segment "RODATA"
 
-;platform_x0:
-;    .byte 0, 120, 136
-;platform_x1:
-;    .byte 120, 136, 255
-;platform_y0:
-;    .byte 184, 120, 184
-;PLATFORM_COUNT = 3
 platform_x0:
     .byte 0, 120
 platform_x1:
@@ -75,6 +68,7 @@ init_jump:
     ; The conditions for completion are
     ; 1. We have reached the ground (y <= GROUND)
     ;   (TODO: ground collision detection)
+    ;   (DONE!)
     ; 2. The button has been released (buttons && $40 = 0)
     ;
     ; We then release the latch.
@@ -113,7 +107,7 @@ update_jump:
     ; NOTE: This can create weird "floaty" effects if pressed multiple times.
     ; You can shoot up to a state with zero velocity and low gravity, which
     ; can feel a bit unnatural.
-    ; TODO: We may want to "latch" this to only permit a single release.
+    ; TODO: We want to "latch" this to only permit a single release.
     lda #G_PRESS
     sta acc_y
     jmp @jump_end
@@ -178,16 +172,13 @@ update_jump:
     ;   - We could then hold next_y in A for comparison tests.
     ;   ... or maybe not, but this seems plausible.
 
-    ; This is more generic but still dumb.
-    ; It only checks if you're below y0, so it's effectively just ground.
-    ; A more advanced method would hold pos_y(n) and pos_y(n+1) and pass that
-    ; the player passes through y0.
-    ; If we're nitpicking, it also only checks vertically.
-
     ldx #0
 @platform_loop:
-    cpx #PLATFORM_COUNT
+    cpx #PLATFORM_COUNT ; Z set if X = #PLATFORM_COUNT
     beq @skip_ground
+
+    ; TODO: The x0 has an off-by-one error somewhere.  We fall through the
+    ;   ground at x=255, even though it's part of the platform!
 
     ; Skip if x < x0
     clc
@@ -218,7 +209,6 @@ update_jump:
     ; Stay one point above the platform
     ; TODO: Maybe define so that y0 is where you stop, rather than the ground?
     sbc #1
-    ;sta pos_y+1
     sta next_y
     lda #0
     sta vel_y
@@ -226,20 +216,20 @@ update_jump:
     sta acc_y
     lda buttons
     and #%10000000
+    ; TODO: So which is it?
     ;bne @skip_ground
-    bne @end_platform_iter
+    bne @end_platform_check
     lda #0
     sta jump_latch
 @end_platform_check:
 
-    ; Finalize y_pos
-    lda next_y
-    sta pos_y+1
-@end_platform_iter:
-
-    inx ; next platform
+    ; Check next platform
+    inx
     jmp @platform_loop
 
 @skip_ground:
+    ; Finalize y_pos
+    lda next_y
+    sta pos_y+1
 
     rts

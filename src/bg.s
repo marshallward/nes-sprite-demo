@@ -19,7 +19,7 @@ bg_table:
         .byte 0
     .endrepeat
 
-    ; Top of the hill
+    ; The platform!
     .repeat 15*1
         .byte 0
     .endrepeat
@@ -28,23 +28,13 @@ bg_table:
         .byte 0
     .endrepeat
 
-    ; Hill interior
-    .repeat 7
-        .repeat 15*1
-            .byte 0
-        .endrepeat
-        .byte 2, 2
-        .repeat 15*1
-            .byte 0
-        .endrepeat
+    ; Below us only sky
+    .repeat 32*7
+        .byte 0
     .endrepeat
 
-    ; Ground (184)
-    .repeat 15*1
-        .byte 5
-    .endrepeat
-    .byte 2, 2
-    .repeat 15*1
+    ; Top soil
+    .repeat 32
         .byte 5
     .endrepeat
 
