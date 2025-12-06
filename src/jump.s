@@ -43,7 +43,7 @@ platform_x0:
 platform_x1:
     .byte 255, 136
 platform_y0:
-    .byte 184, 120
+    .byte 185, 121
 PLATFORM_COUNT = 2
 
 
@@ -111,7 +111,7 @@ update_jump:
     beq @vel_up_release
 ;@vel_up_press:
     ; NOTE: This can create weird "floaty" effects if pressed multiple times.
-    ; You can shoot up to a state with zero velocity and low gravity, which 
+    ; You can shoot up to a state with zero velocity and low gravity, which
     ; can feel a bit unnatural.
     ; TODO: We may want to "latch" this to only permit a single release.
     lda #G_PRESS
@@ -137,7 +137,7 @@ update_jump:
     lda buttons
     and #%10000000
     beq @jump_end
- 
+
     ; Latch is unset, and button is pressed.  Apply impulse velocity and latch.
     lda #VEL_JUMP_LO
     sta vel_y
@@ -172,12 +172,12 @@ update_jump:
     adc vel_y+1
     ;sta pos_y+1
     sta next_y
-    
+
     ; TODO: We might be able to avoid the need for next_y!
     ;   - We could apply the platform x-tests before computing pos_y+1
     ;   - We could then hold next_y in A for comparison tests.
     ;   ... or maybe not, but this seems plausible.
-    
+
     ; This is more generic but still dumb.
     ; It only checks if you're below y0, so it's effectively just ground.
     ; A more advanced method would hold pos_y(n) and pos_y(n+1) and pass that
@@ -207,7 +207,7 @@ update_jump:
     lda pos_y+1
     cmp platform_y0, x  ; C = pos_y >= y0(p)
     bcs @end_platform_check
- 
+
     ; Skip if the updated y_pos is still above y0(p) (next_y < y0(p))
     ;lda pos_y+1
     lda next_y
@@ -215,6 +215,9 @@ update_jump:
     bcc @end_platform_check
 
     lda platform_y0, x
+    ; Stay one point above the platform
+    ; TODO: Maybe define so that y0 is where you stop, rather than the ground?
+    sbc #1
     ;sta pos_y+1
     sta next_y
     lda #0
@@ -223,14 +226,16 @@ update_jump:
     sta acc_y
     lda buttons
     and #%10000000
-    bne @skip_ground
+    ;bne @skip_ground
+    bne @end_platform_iter
     lda #0
     sta jump_latch
-
 @end_platform_check:
+
     ; Finalize y_pos
     lda next_y
     sta pos_y+1
+@end_platform_iter:
 
     inx ; next platform
     jmp @platform_loop
