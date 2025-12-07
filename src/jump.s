@@ -189,30 +189,25 @@ update_jump:
     beq @skip_ground
 
     ; TODO: The x0(p) has an off-by-one error somewhere.  We fall through the
-    ;   ground at x=255, even though it's part of the platform!
-    ; TODO: Probably related to falling through if x_sprite = x0(p)
+    ;   ground at either x=0 or x=255, even though it's part of the platform!
+    ; TODO: Also added a +1 to avoid some misalignment of sprite position with
+    ;   platform.  Perhaps related to the above error but it seems different.
+    ; In other words, this reeks of off-by-one errors!
 
     ; Skip if x < x0
     clc
     lda pos_x
+    adc #1  ; TODO: OFF BY ONE ERROR!!!
     adc scroll_x
-    cmp platform_x0, x  ; C = pos_x >= x0(p)
+    cmp platform_x0, x  ; C = pos_x + scroll_x >= x0(p)
     bcc @end_platform_check
 
     ; Skip if x > x0
-    ; TODO: The load/store ordering is probably inefficient, but we need to
-    ;   run it this way in order to test x1(p) = 255 correctly.
-    ; In a 16.x precision map (if not larger), maybe this is not necessary.
-    ;;clc
-    ;;lda platform_x1, x
-    ;;sbc scroll_x
-    ;;cmp pos_x   ; C = x1(p) >= pos_x
-    ;;            ; ~C = pos_x < x1(p)
-    ;;bcc @end_platform_check
     clc
     lda pos_x
+    adc #1  ; TODO: OFF BY ONE ERROR!!!
     adc scroll_x
-    cmp platform_x1, x
+    cmp platform_x1, x  ; C = pos_x + scroll_x >= x1(p)
     bcs @end_platform_check
 
     ; Have we crossed y0?
