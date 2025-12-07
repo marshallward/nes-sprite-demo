@@ -32,12 +32,12 @@
 .segment "RODATA"
 
 platform_x0:
-    .byte 0, 120
+    .byte 0, 120, 120
 platform_x1:
-    .byte 255, 136
+    .byte 255, 136, 136
 platform_y0:
-    .byte 185, 121
-PLATFORM_COUNT = 2
+    .byte 185, 137, 105
+PLATFORM_COUNT = 3
 
 
 ; Jump parameters (positive is downward)
@@ -203,10 +203,17 @@ update_jump:
     ; TODO: The load/store ordering is probably inefficient, but we need to
     ;   run it this way in order to test x1(p) = 255 correctly.
     ; In a 16.x precision map (if not larger), maybe this is not necessary.
-    lda platform_x1, x
-    cmp pos_x   ; C = x1(p) >= pos_x
-                ; ~C = pos_x < x1(p)
-    bcc @end_platform_check
+    ;;clc
+    ;;lda platform_x1, x
+    ;;sbc scroll_x
+    ;;cmp pos_x   ; C = x1(p) >= pos_x
+    ;;            ; ~C = pos_x < x1(p)
+    ;;bcc @end_platform_check
+    clc
+    lda pos_x
+    adc scroll_x
+    cmp platform_x1, x
+    bcs @end_platform_check
 
     ; Have we crossed y0?
     ; NOTE: Load platform_y0, then only need one lda?

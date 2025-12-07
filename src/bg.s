@@ -15,7 +15,7 @@
 ; A simple nametable example
 bg_table:
     ; All sky
-    .repeat 32*16
+    .repeat 32*14
         .byte 0
     .endrepeat
 
@@ -29,7 +29,21 @@ bg_table:
     .endrepeat
 
     ; Below us only sky
-    .repeat 32*7
+    .repeat 32*3
+        .byte 0
+    .endrepeat
+
+    ; The platform!
+    .repeat 15*1
+        .byte 0
+    .endrepeat
+    .byte 5, 5
+    .repeat 15*1
+        .byte 0
+    .endrepeat
+
+    ; Below us only sky
+    .repeat 32*5
         .byte 0
     .endrepeat
 
