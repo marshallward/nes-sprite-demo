@@ -23,7 +23,7 @@
     ;   platforms be defined as subpixel.
     next_y: .res 1
 
-    ; Set during jump, disables jump start until landing.
+    ; Set during jump, disables new jumps until landing.
     jump_latch: .res 1
 
 
@@ -120,10 +120,9 @@ update_jump:
     lda #G_DOWN
     sta acc_y
 
-;@jump_start:
+    ;; Acceleration is set, but now check for impulse force.
+
     ; Do not apply impulse if latch is set.
-    ; This is also an implicit on-the-ground test.
-    ; TODO: Except it doesn't account for running off a ledge!
     lda jump_latch
     bne @jump_end
 
@@ -132,16 +131,27 @@ update_jump:
     and #%10000000
     beq @jump_end
 
+    ; Currently we do not jump if velocity is downward.
+    ; But this could be changed here.
+    lda vel_y+1
+    bne @jump_set_latch
+
     ; Latch is unset, and button is pressed.  Apply impulse velocity and latch.
+
+    ; If velocity is zero then we're on the ground and apply impulse
     lda #VEL_JUMP_LO
     sta vel_y
     lda #VEL_JUMP_HI
     sta vel_y+1
+    ;jmp @jump_set_latch
+
+@jump_set_latch:
     ; set the latch
     lda #1
     sta jump_latch
-@jump_end:
 
+@jump_end:
+    ; Jump acceleration and impulse force complete.
 
 @apply_accel:
     ;; Update velocity
@@ -164,7 +174,6 @@ update_jump:
     ; Pixel
     lda pos_y+1
     adc vel_y+1
-    ;sta pos_y+1
     sta next_y
 
     ; TODO: We might be able to avoid the need for next_y!
@@ -172,13 +181,16 @@ update_jump:
     ;   - We could then hold next_y in A for comparison tests.
     ;   ... or maybe not, but this seems plausible.
 
+    ; Apply platform correction to next_y
+
     ldx #0
 @platform_loop:
     cpx #PLATFORM_COUNT ; Z set if X = #PLATFORM_COUNT
     beq @skip_ground
 
-    ; TODO: The x0 has an off-by-one error somewhere.  We fall through the
+    ; TODO: The x0(p) has an off-by-one error somewhere.  We fall through the
     ;   ground at x=255, even though it's part of the platform!
+    ; TODO: Probably related to falling through if x_sprite = x0(p)
 
     ; Skip if x < x0
     clc
@@ -188,8 +200,13 @@ update_jump:
     bcc @end_platform_check
 
     ; Skip if x > x0
-    cmp platform_x1, x  ; C = pos_x >= x1(p)
-    bcs @end_platform_check
+    ; TODO: The load/store ordering is probably inefficient, but we need to
+    ;   run it this way in order to test x1(p) = 255 correctly.
+    ; In a 16.x precision map (if not larger), maybe this is not necessary.
+    lda platform_x1, x
+    cmp pos_x   ; C = x1(p) >= pos_x
+                ; ~C = pos_x < x1(p)
+    bcc @end_platform_check
 
     ; Have we crossed y0?
     ; NOTE: Load platform_y0, then only need one lda?
@@ -200,7 +217,6 @@ update_jump:
     bcs @end_platform_check
 
     ; Skip if the updated y_pos is still above y0(p) (next_y < y0(p))
-    ;lda pos_y+1
     lda next_y
     cmp platform_y0, x  ; C = next_y >= y0(p)
     bcc @end_platform_check
