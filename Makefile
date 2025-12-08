@@ -13,17 +13,14 @@ CHR = $(BUILD)/chr.bin
 NES = $(BUILD)/jump.nes
 
 # TODO: Automate?
-OBJECTS = $(BUILD)/main.o $(BUILD)/pad.o $(BUILD)/bg.o $(BUILD)/jump.o
+OBJECTS = $(BUILD)/main.o $(BUILD)/pad.o $(BUILD)/bg.o $(BUILD)/jump.o \
+	$(BUILD)/header.o
 
 all: $(NES)
 
-# Prepend the iNES header
+# Append the CHR ROM
 $(NES): $(PRG) $(CHR)
-	printf '\x4e\x45\x53\x1a' > $@
-	printf '\x01' >> $@
-	printf '\x01' >> $@
-	printf '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' >> $@
-	cat $(PRG) >> $@
+	cat $(PRG) > $@
 	cat $(CHR) >> $@
 
 # Build the PRG ROM
