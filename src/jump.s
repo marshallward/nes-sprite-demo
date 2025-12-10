@@ -188,11 +188,8 @@ update_jump:
     cpx #PLATFORM_COUNT ; Z set if X = #PLATFORM_COUNT
     beq @skip_ground
 
-    ; TODO: The x0(p) has an off-by-one error somewhere.  We fall through the
-    ;   ground at either x=0 or x=255, even though it's part of the platform!
     ; TODO: Also added a +1 to avoid some misalignment of sprite position with
-    ;   platform.  Perhaps related to the above error but it seems different.
-    ; In other words, this reeks of off-by-one errors!
+    ;   platform.
 
     ; Skip if x < x0
     clc
@@ -203,12 +200,14 @@ update_jump:
     bcc @end_platform_check
 
     ; Skip if x > x0
-    clc
-    lda pos_x
-    adc #1  ; TODO: OFF BY ONE ERROR!!!
-    adc scroll_x
+    ; NOTE: For now, we want checks to be inclusive (pos_x + scroll_x > x1(p)).
+    ;   But is because we only have a single 0..255 screen.
+    ;   If we ever get a global map, then maybe this can be wiped.
+    ; NOTE: Assume A = pos_x + scroll_x
     cmp platform_x1, x  ; C = pos_x + scroll_x >= x1(p)
+    beq :+              ; If Z, skip check
     bcs @end_platform_check
+:
 
     ; Have we crossed y0?
     ; NOTE: Load platform_y0, then only need one lda?
