@@ -21,7 +21,7 @@
     ;        0  Nametable arrangement
     ;               0: vertical arrangement ("horizontal mirroring")
     ;               1: horizontal arrangement ("vertical mirroring")
-    .byte %00000000
+    .byte %00000001
 
     ; 7654      Upper 4 bits of mapper
     ;     32    2: Use NES 2.0 format
