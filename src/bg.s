@@ -79,7 +79,14 @@ bg1:
         .byte 0
     .endrepeat
 
-    .repeat 32
+    ;.repeat 32
+    ;    .byte 5
+    ;.endrepeat
+    .repeat 15*1
+        .byte 5
+    .endrepeat
+    .byte 1, 1
+    .repeat 15*1
         .byte 5
     .endrepeat
 

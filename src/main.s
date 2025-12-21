@@ -18,6 +18,8 @@
 .exportzp pos_x
 .exportzp pos_y
 .exportzp scroll_x
+.exportzp ntable
+
 .exportzp arg0
 .exportzp arg1
 .exportzp arg2
@@ -36,7 +38,7 @@
 
     ; Current nametable (0 or 1)
     ; NOTE: This almost acts as an upper byte of position.  Look into it...
-    nt: .res 1
+    ntable: .res 1
 
     ; Function arguments
     arg0: .res 1
@@ -129,7 +131,7 @@ reset:
     sta PPUSCROLL   ; yscroll = 0
 
     ; Set current nametable to NT0
-    sta nt  ; nt = 0
+    sta ntable  ; ntable = 0
 
     ; enable background and sprites
     SET_PPUMASK #%00011000
@@ -183,9 +185,9 @@ main:
     adc #1
     sta scroll_x
     bcc :+
-    lda nt
+    lda ntable
     eor #1
-    sta nt
+    sta ntable
 @skip_right:
 
     ; Check Left
@@ -204,9 +206,9 @@ main:
     sbc #1
     sta scroll_x
     bcs :+
-    lda nt
+    lda ntable
     eor #1
-    sta nt
+    sta ntable
 :
 @skip_left:
 
@@ -243,7 +245,7 @@ nmi:
 
     ; Update nametable
     lda #%10000000
-    ora nt
+    ora ntable
     sta PPUCTRL
 
     rti
