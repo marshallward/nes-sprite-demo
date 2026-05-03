@@ -1,6 +1,8 @@
 .ifndef ::PPU_INC
 PPU_INC = 1
 
+; CPU memory map
+
 ; PPU control registers
 PPUCTRL = $2000
 PPUMASK = $2001
@@ -11,7 +13,30 @@ PPUADDR = $2006
 PPUDATA = $2007
 OAMDMA = $4014
 
+;----------------
 ; PPU memory map
+
+; Pattern tables
+PATTERN_TABLES = $0000
+PATTERN_0 = PATTERN_TABLES
+PATTERN_1 = PATTERN_TABLES + $1000
+
+; Nametables
+; Video map of 32x30(=960) tiles
+;   Each byte maps to one of 256 tiles in the assigned pattern table.
+NAMETABLES = $2000
+NAMETABLE_0 = NAMETABLES + $0000
+NAMETABLE_1 = NAMETABLES + $400
+NAMETABLE_2 = NAMETABLES + $800
+NAMETABLE_3 = NAMETABLES + $c00
+
+; Attribute table
+ATTR_TABLE_0 = NAMETABLE_0 + $3c0
+ATTR_TABLE_1 = NAMETABLE_1 + $3c0
+ATTR_TABLE_2 = NAMETABLE_2 + $3c0
+ATTR_TABLE_3 = NAMETABLE_3 + $3c0
+
+; Background
 BG_PALETTE = $3f00
 BG0_PALETTE = BG_PALETTE
 BG1_PALETTE = BG_PALETTE + $04
@@ -44,6 +69,26 @@ loop:
     lda #<(addr)
     sta PPUADDR
 .endmacro
+
+
+; These are unlikely needed but for now serve as documentation.
+
+.macro SET_PPUCTRL value
+    ;       11 : Base nametable address (NT0-NT3)
+    ;      1   : VRAM address increment per CPU read/write
+    ;          :    (0: +1 along row ; 1: +32 along column)
+    ;     1    : Sprite pattern table address (8x8 only) (ST0-ST1)
+    ;    1     : Background pattern table address (BT0-BT1)
+    ;   1      : Sprite size
+    ;          :    (0: 8x8 ; 1: 8x16)
+    ;  1       : PPU master/slave select
+    ;               (0: Read background from EXT; 1: Output color on EXT)
+    ; 1        : VBlank NMI enable
+    ;          :    (0: off ; 1: enable)
+    lda value
+    sta PPUCTRL
+.endmacro
+
 
 ; Set PPU "mask" controls.
 ; After reset, these are ignored until the next pre-render scanline.

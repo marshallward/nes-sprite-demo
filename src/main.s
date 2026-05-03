@@ -7,15 +7,22 @@
 .import update_jump
 
 ; Data
+; I am literally importing these things so that I can pass them back to bg.s
+; I'm sure this is silly but I just want to get it working for now.
 .import render_bg
-.import bg_table
+.import bg0
+.import bg1
 
 ; Needed by update_jump
 ; (Though perhaps it should be an input?)
 .exportzp pos_x
 .exportzp pos_y
 .exportzp scroll_x
+.exportzp ntable
 
+.exportzp arg0
+.exportzp arg1
+.exportzp arg2
 
 ; Sprite positions
 .segment "ZEROPAGE"
@@ -29,6 +36,15 @@
     ; Map position (I think...)
     scroll_x: .res 1
 
+    ; Current nametable (0 or 1)
+    ; NOTE: This almost acts as an upper byte of position.  Look into it...
+    ntable: .res 1
+
+    ; Function arguments
+    arg0: .res 1
+    arg1: .res 1
+    arg2: .res 1
+
 
 .setcpu "6502"
 .segment "CODE"
@@ -36,7 +52,23 @@
 reset:
     INITIALIZE_NES
 
-    ; Render background background
+    ;; Render background background
+
+    ; TODO: Just move this whole thing into bg.s
+    lda #<bg0
+    sta arg0
+    lda #>bg0
+    sta arg1
+    lda #$20
+    sta arg2
+    jsr render_bg
+
+    lda #<bg1
+    sta arg0
+    lda #>bg1
+    sta arg1
+    lda #$24
+    sta arg2
     jsr render_bg
 
     ;; Render a single sprite
@@ -95,12 +127,14 @@ reset:
     ; Set PPU scroll to zero
     ; (Maybe not so important now that the NMI handles this?)
     lda #0
-    sta PPUSCROLL
-    sta PPUSCROLL
+    sta PPUSCROLL   ; xscroll = 0
+    sta PPUSCROLL   ; yscroll = 0
+
+    ; Set current nametable to NT0
+    sta ntable  ; ntable = 0
 
     ; enable background and sprites
     SET_PPUMASK #%00011000
-
 
     ;; Game setup
 
@@ -132,18 +166,28 @@ main:
     ; Read controller
     jsr read_joypad1
 
+    ; TODO: Move left-right logic to jump.s
+    ;   (And rename jump.s to move or something!)
+
     ; Check Right
     lda buttons
     and #%00000001
     beq @skip_right
-    lda pos_x
-    cmp #160    ; C = pos_x >= 160
-    bcc @right_move
-;@right_scroll:
-    inc scroll_x
-    jmp @skip_right
-@right_move:
+    lda #160
+    cmp pos_x   ; C = pos_x <= A
+    bcc @right_scroll
+;@right_move
     inc pos_x
+    jmp @skip_right
+@right_scroll:
+    clc
+    lda scroll_x
+    adc #1
+    sta scroll_x
+    bcc :+
+    lda ntable
+    eor #1
+    sta ntable
 @skip_right:
 
     ; Check Left
@@ -151,13 +195,21 @@ main:
     and #%00000010
     beq @skip_left
     lda pos_x
-    cmp #96 ; C = pos_x >= 96
+    cmp #96     ; C = pos_x >= A
     bcc @left_scroll
 ;@left_move
     dec pos_x
     jmp @skip_left
 @left_scroll:
-    dec scroll_x
+    sec
+    lda scroll_x
+    sbc #1
+    sta scroll_x
+    bcs :+
+    lda ntable
+    eor #1
+    sta ntable
+:
 @skip_left:
 
     jsr update_jump
@@ -190,6 +242,11 @@ nmi:
     ; Set the frame drawn flag
     lda #1
     sta frame
+
+    ; Update nametable
+    lda #%10000000
+    ora ntable
+    sta PPUCTRL
 
     rti
 

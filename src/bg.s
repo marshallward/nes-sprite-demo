@@ -1,19 +1,34 @@
 .include "ppu.inc"
 
-.export bg_table
 .export render_bg
 
+; oh isnt this dumb
+; (This will be in CHR or something one day...)
+.export bg0
+.export bg1
 
-.segment "ZEROPAGE"
-    ; bg nametable pointer
-    bg_ptr_lo: .res 1
-    bg_ptr_hi: .res 1
+; Function arguments
+.importzp arg0
+.importzp arg1
+.importzp arg2
+
+; Alias to inputs
+; (All temporary of course!)
+bg_ptr_lo = arg0
+bg_ptr_hi = arg1
+
+
+;.segment "ZEROPAGE"
+;    ; bg nametable pointer
+;    bg_ptr_lo: .res 1
+;    bg_ptr_hi: .res 1
 
 
 .segment "RODATA"
 
 ; A simple nametable example
-bg_table:
+; NOTE: This should probably be done in some graphical form
+bg0:
     ; All sky
     .repeat 32*14
         .byte 0
@@ -53,7 +68,29 @@ bg_table:
     .endrepeat
 
     ; All dirt
-    .repeat 32*3
+    .repeat 32*5
+        .byte 2
+    .endrepeat
+
+
+; Make a second, simple table
+bg1:
+    .repeat 32*24
+        .byte 0
+    .endrepeat
+
+    ;.repeat 32
+    ;    .byte 5
+    ;.endrepeat
+    .repeat 15*1
+        .byte 5
+    .endrepeat
+    .byte 1, 1
+    .repeat 15*1
+        .byte 5
+    .endrepeat
+
+    .repeat 32*5
         .byte 2
     .endrepeat
 
@@ -62,6 +99,11 @@ bg_table:
 .segment "CODE"
 
 render_bg:
+    ; Inputs
+    ; ======
+    ; bg_ptr_lo = arg0
+    ; bg_ptr_hi = arg1
+
     ; Clear the PPU VRAM latch
     lda PPUSTATUS
 
@@ -80,15 +122,15 @@ render_bg:
     sta PPUDATA
 
     ; Copy the nametable to the PPU
-    SET_PPUADDR $2000
+    ; TODO: This could be refined to write a set of rows/columns
+    ;   For now we (crudely) set the nametable
+    ;SET_PPUADDR $2000
+    lda arg2
+    sta PPUADDR
+    lda #0
+    sta PPUADDR
 
-    ; NOTE: This 16-bit data copy could be a subroutine, if not a macro.
-
-    ; Assign the nametable starting address
-    lda #<bg_table
-    sta bg_ptr_lo
-    lda #>bg_table
-    sta bg_ptr_hi
+    ; NOTE: This 16-bit data copy could be its own subroutine.
 
     ldx #30
 @bg_row_loop:

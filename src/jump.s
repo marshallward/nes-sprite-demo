@@ -4,6 +4,7 @@
 .importzp pos_x
 .importzp pos_y
 .importzp scroll_x
+.importzp ntable
 
 ; Jump management reads directly from `buttons`, but we could decouple it.
 .importzp buttons
