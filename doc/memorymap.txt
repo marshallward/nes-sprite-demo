@@ -4,7 +4,7 @@ how everything works.
 Memory map
 ==========
 
-This defines the memory map of the game.  Formally, it tells the assember
+This defines the memory map of the game.  Formally, it tells the assembler
 where to place content in memory.  Currently I am using the simplest mapper,
 NROM-128.  The linker configuration is in ``cfg/nrom128.cfg``.
 
@@ -37,27 +37,29 @@ Memory
 
 The Famicom's Ricoh 2A03 chip has 2kiB of on-chip memory.
 
-The first 256 bytes ``[$0000:00ff]`` is identified as the "zero page" (ZP).
-Instructions can reference the address of a zero page element using only one
-byte, so they are generally smaller and the cycle counts are shorter.  For
-example,
+The first 256 bytes ``[$0000:00ff]`` is "zero page" (ZP).  Only one byte is
+required to reference these addresses, so they are smaller and run faster.  For
+example:
 
-* ``lda $10`` requires three cycles, and
+* ``lda $10`` requires three cycles.
 * ``lda $1234`` requires four cycles.
 
 Sometimes the zero page elements are called "registers", but the memory itself
 is no different from the rest of the on-chip memory.
 
-The second region ``[$0200:$07ff]`` is the rest of the on-chip RAM, used for
-general purpose computing when one can afford to use the longer instructions.
+The region ``[$100:$1ff]`` is reserved for the processor's stack memory, which
+hold temporarily stored values and program counters.  It can be used for
+general computation, but there is a risk of stack corruption.  For now, we
+exclude it from our linker map.
 
-The region ``[$100:$1ff]`` is reserved for the internal "stack memory" for
-operations such as function calls.  It can be used for storage, but there
-is a risk of stack corruption.  For now, we simply exclude it from our linker
-map.
+The second mapped region ``[$0200:$07ff]`` defines the rest of the on-chip RAM,
+used for general purpose computing when one can afford to use the longer
+instructions.
 
 All memory is tagged as ``rw``, indicating that can be used for reading and
 writing.
 
 
+Segments
+--------
 
