@@ -3,11 +3,12 @@
 
 .macro INITIALIZE_NES
     ; Disable maskable CPU interrupts
-    sei
+    ;sei
+    ; NOTE: The 2A03 sets (I) on both power cycle and reset, so not needed.
 
     ; Disable BCD arithmetic
-    ; NOTE: The NES 2A03 chip has no D flag, so this does nothing.
     ;cld
+    ; NOTE: The 2A03 has no (D) flag, so this does nothing.
 
     ; Disable APU frame interrupts
     ldx #%10000000

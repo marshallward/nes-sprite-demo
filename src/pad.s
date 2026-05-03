@@ -40,15 +40,19 @@ read_joypad1:
     lda #$00
     sta JOYPAD1
 
-    ; Read data
 @loop:
+    ; Copy JOYPAD1 to A
     lda JOYPAD1
+
     ; Shift bit0 of JOYPAD1 to Carry
     lsr a
+
     ; Shift Carry to bit0 of `buttons`, and bit7 to Carry
     rol buttons
+
     ; Break if Carry is set, which happens after 8 iterations.
     bcc @loop
+
     ; Return to game
     rts
 
