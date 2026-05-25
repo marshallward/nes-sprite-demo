@@ -16,7 +16,13 @@ NES = $(BUILD)/jump.nes
 OBJECTS = $(BUILD)/main.o $(BUILD)/pad.o $(BUILD)/bg.o $(BUILD)/jump.o \
 	$(BUILD)/header.o
 
+
+# Build rules
+
 all: $(NES)
+
+doc: FORCE
+	make -C doc/
 
 # Append the CHR ROM
 $(NES): $(PRG) $(CHR)
@@ -43,6 +49,9 @@ $(BUILD)/%.o: $(SRC)/%.s | $(BUILD)
 
 $(BUILD):
 	mkdir -p $(BUILD)
+
+# Submake force rule
+FORCE:
 
 # Wipe the build
 clean:

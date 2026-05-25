@@ -1,0 +1,120 @@
+Platform collision detection
+============================
+
+Crossing a platform can be reduced to two independent tests.
+
+* Does the displacement cross the line defined by the endpoints?
+
+* Does the displacement pass between the endpoints of the platform?
+
+Each question can be answered by comparing the signs of particular angles,
+which can be computed using vector algebra identities.
+
+.. image:: asy/cross_platform.svg
+   :align: center
+   :width: 50%
+
+.. math::
+
+   (\overrightarrow{AB} \times \overrightarrow{AP}) \cdot \mathbf{k}
+      = |\overrightarrow{AB}| |\overrightarrow{AP}| \sin \phi_P
+      = \left[ (b_1 - a_1) (p_2 - a_2) - (b_2 - a_2) (p_1 - a_1) \right]
+
+   (\overrightarrow{AB} \times \overrightarrow{AQ}) \cdot \mathbf{k}
+      = |\overrightarrow{AB}| |\overrightarrow{AQ}| \sin \phi_Q
+      = \left[ (b_1 - a_1) (q_2 - a_2) - (b_2 - a_2) (q_1 - a_1) \right]
+
+If :math:`\phi_P` and :math:`\phi_Q` have different signs, then
+:math:`\overrightarrow{PQ}` crosses the line defined by :math:`\overline{AB}`.
+
+Let :math:`\sigma(a)` denote the sign of a quantity :math:`a`.  Then the
+line-crossing constraint is :math:`\sigma(\phi_P) \neq \sigma(\phi_Q)`.  Since
+our angles are restricted to :math:`(-\pi, \pi)`, we can assume that
+:math:`\sigma(\sin \phi) = \sigma(\phi)`.  And since vector amplitudes are
+always positive, the line-crossing constraint reduces to these expressions.
+
+.. math::
+
+   \sigma_P = \sigma \left[
+      (b_1 - a_1) (p_2 - a_2) - (b_2 - a_2) (p_1 - a_1)
+   \right]
+
+   \sigma_Q = \sigma \left[
+      (b_1 - a_1) (q_2 - a_2) - (b_2 - a_2) (q_1 - a_1)
+   \right]
+
+where :math:`\sigma_X \equiv \sigma(\sin \phi_X)` for points :math:`X`.
+
+A similar angle test can be used to determine whether the crossing occurs
+within the length of the platform, as seen in the figure below.
+
+.. image:: asy/along_platform.svg
+   :align: center
+   :width: 50%
+
+The line along the displacement :math:`\overrightarrow{PQ}` crosses between the
+segment endpoints of :math:`\overline{AB}` if :math:`\phi_A` and :math:`\phi_B`
+are of opposite sign.  The corresponding sign expressions are
+
+.. math::
+
+   \sigma_A = \sigma \left[
+      (q_1 - p_1) (a_2 - p_2) - (q_2 - p_2) (a_1 - p_1)
+   \right]
+
+   \sigma_B = \sigma \left[
+      (q_1 - p_1) (b_2 - p_2) - (q_2 - p_2) (b_1 - p_1)
+   \right]
+
+which can be used to determine if :math:`\sigma_A \neq \sigma_B`.
+
+.. \phi = \pi may be interesting for pathological cases, or just a
+   mathematically interesting but irrelevant edge case.  Not sure yet.
+
+
+Flat platforms
+--------------
+
+The simplest case to consider is flat boundaries.  For a horizontal platform,
+the length is :math:`|b_1 - a_1|` and the height is :math:`a_2 = b_2`.
+
+The platform-line crossing test reduces to a simple and expected result.
+
+.. math::
+
+   \sigma_P = \sigma(b_1 - a_1) \sigma(p_2 - a_2)
+
+   \sigma_Q = \sigma(b_1 - a_1) \sigma(q_2 - a_2)
+
+The :math:`\sigma_P \neq \sigma_Q` condition reduces to :math:`\sigma(p_2 -
+a_2) \neq \sigma(q_2 - a_2)`; that is, :math:`p_2` and :math:`q_2` are on
+opposite sides of the line which passes through :math:`a_2`.
+
+This presumes a nonzero platform length.  A zero-length platform reduces the
+collision target to a single point, which is often not the intention of the
+developer.
+
+Passing within the platform is less simple.  The only minor simplification is
+the common offset term.
+
+.. TODO: Figure showing.
+
+.. math::
+
+   \sigma_A = \sigma \left[
+      (q_1 - p_1) (a_2 - p_2) - (q_2 - p_2) (a_1 - p_1)
+   \right]
+
+   \sigma_B = \sigma \left[
+      (q_1 - p_1) (b_2 - p_2) - (q_2 - p_2) (b_1 - p_1)
+   \right]
+
+
+The first term in each expression is constant, but one is still required to
+compute the full expressions.
+
+Often, one does not try to compute the actual difference, and will instead use
+an approximate check for whether either :math:`p_1` or :math:`q_1` is between
+:math:`a_1` and :math:`b_1`.  This resembles the :math:`\sigma_P \neq \sigma_Q`
+test and might be justified if the left-right displacement :math:`q_1 - p_1` is
+small.
