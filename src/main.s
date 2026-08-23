@@ -5,6 +5,7 @@
 .import read_joypad1
 .import init_jump
 .import update_jump
+.import init_platforms
 
 ; Data
 ; I am literally importing these things so that I can pass them back to bg.s
@@ -145,6 +146,9 @@ reset:
     ; Initialize kinematic state
     ; This is only needed because we don't pass vel_y and acc_y!
     jsr init_jump
+
+    ; Initialize active platform data
+    jsr init_platforms
 
     ; Initialize scrolling
     lda #0

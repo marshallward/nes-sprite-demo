@@ -5,12 +5,17 @@
 .importzp pos_y
 .importzp scroll_x
 .importzp ntable
+.importzp platform_hit
+.importzp platform_hit_y
 
 ; Jump management reads directly from `buttons`, but we could decouple it.
 .importzp buttons
 
+.import apply_platform_collision
+
 .export init_jump
 .export update_jump
+.exportzp next_y
 
 ; These variables define "jump state", and could be passed as inputs.
 .segment "ZEROPAGE"
@@ -26,21 +31,6 @@
 
     ; Set during jump, disables new jumps until landing.
     jump_latch: .res 1
-
-
-;; This is a temporary platform buffer.  But it could be updated as the player
-;; moves through the level.
-.segment "RODATA"
-
-platform_x0:
-    .byte 0, 120, 120
-platform_x1:
-    .byte 255, 136, 136
-platform_y0:
-    .byte 185, 137, 105
-PLATFORM_COUNT = 3
-
-
 ; Jump parameters (positive is downward)
 VEL_JUMP_LO = 128
 VEL_JUMP_HI = <-4
@@ -166,7 +156,7 @@ update_jump:
     inc vel_y+1
 :
 
-    ;; Update position
+    ;; Update free-motion position
     clc
     ; Subpixel
     lda pos_y
@@ -183,50 +173,11 @@ update_jump:
     ;   ... or maybe not, but this seems plausible.
 
     ; Apply platform correction to next_y
-
-    ldx #0
-@platform_loop:
-    cpx #PLATFORM_COUNT ; Z set if X = #PLATFORM_COUNT
+    jsr apply_platform_collision
+    lda platform_hit
     beq @skip_ground
 
-    ; TODO: Also added a +1 to avoid some misalignment of sprite position with
-    ;   platform.
-
-    ; Skip if x < x0
-    clc
-    lda pos_x
-    adc #1  ; TODO: OFF BY ONE ERROR!!!
-    adc scroll_x
-    cmp platform_x0, x  ; C = pos_x + scroll_x >= x0(p)
-    bcc @end_platform_check
-
-    ; Skip if x > x0
-    ; NOTE: For now, we want checks to be inclusive (pos_x + scroll_x > x1(p)).
-    ;   But is because we only have a single 0..255 screen.
-    ;   If we ever get a global map, then maybe this can be wiped.
-    ; NOTE: Assume A = pos_x + scroll_x
-    cmp platform_x1, x  ; C = pos_x + scroll_x >= x1(p)
-    beq :+              ; If Z, skip check
-    bcs @end_platform_check
-:
-
-    ; Have we crossed y0?
-    ; NOTE: Load platform_y0, then only need one lda?
-
-    ; Skip if we were already below y0(p) (pos_y > y0(p))
-    lda pos_y+1
-    cmp platform_y0, x  ; C = pos_y >= y0(p)
-    bcs @end_platform_check
-
-    ; Skip if the updated y_pos is still above y0(p) (next_y < y0(p))
-    lda next_y
-    cmp platform_y0, x  ; C = next_y >= y0(p)
-    bcc @end_platform_check
-
-    lda platform_y0, x
-    ; Stay one point above the platform
-    ; TODO: Maybe define so that y0 is where you stop, rather than the ground?
-    sbc #1
+    lda platform_hit_y
     sta next_y
     lda #0
     sta vel_y
@@ -236,14 +187,9 @@ update_jump:
     and #%10000000
     ; TODO: So which is it?
     ;bne @skip_ground
-    bne @end_platform_check
+    bne @skip_ground
     lda #0
     sta jump_latch
-@end_platform_check:
-
-    ; Check next platform
-    inx
-    jmp @platform_loop
 
 @skip_ground:
     ; Finalize y_pos

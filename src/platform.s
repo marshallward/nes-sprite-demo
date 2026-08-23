@@ -1,43 +1,111 @@
-; Platform control
+; Platform data
 ;
-; Currently static but could be continuously filled from ROM.
-; Platform segments are (A0,A1) to (B0,B1).
-;
-; Proposed models:
-;   (A0, A1, B0, B1)
-;       Most compact, but slope must be determined, which takes time.
-;   (A0, A1, Slope-X, Slope-Y, Length)
-;
-; Or break it into separate types of platforms:
-;       If sloped platforms are rare then this might make the most sense.
-;   (A0, A1, X-length)
-;   (A0, A1, Y-length)
-;   (A0, A1, X-length, SlopeX, SlopeY)
+; Current runtime data used by jump.s for horizontal platform collision.
+; See platform_dev.s for the more general platform-list sketch.
+
+.export init_platforms
+.export apply_platform_collision
+.export platform_x0
+.export platform_x1
+.export platform_y0
+.exportzp platform_count
+.exportzp platform_hit
+.exportzp platform_hit_y
+
+.importzp pos_x
+.importzp pos_y
+.importzp scroll_x
+.importzp next_y
+
+.segment "ZEROPAGE"
+
+platform_count:
+    .res 1
+platform_hit:
+    .res 1
+platform_hit_y:
+    .res 1
+
 .segment "RODATA"
-platform_data:
-platform_1:
-    .byte 0, 185, 255, 185
-platform_2:
-    .byte: 120, 136, 120, 185
-PLATFORM_STRIDE = platform_2 - platform_1
-NUM_PLATFORMS = (platform_2 - platform_data) / PLATFORM_STRIDE
 
-; Assert NUM_PLATFORMS * PLATFORM_STORAGE < 256?
+platform_x0:
+    .byte 0, 120, 120
+platform_x1:
+    .byte 255, 136, 136
+platform_y0:
+    .byte 185, 137, 105
 
-; Platform traversal check
+.setcpu "6502"
+.segment "CODE"
 
-    ldy #0
+init_platforms:
+    lda #3
+    sta platform_count
+    lda #0
+    sta platform_hit
+    rts
+
+
+apply_platform_collision:
+    lda #0
+    sta platform_hit
+
+    ldx #0
 @platform_loop:
-    cpy #NUM_PLATFORMS * #PLATFORM_STORAGE
-        ; Z = (Y == #NUM_PLATFORMS)
+    cpx platform_count  ; Z set if X = platform_count
     beq @end_platform_loop
 
-    ; compute checks...
-    clc     ; need?
-    ; TODO: A = p1
+    ; Skip if x < x0
+    clc
+    lda pos_x
+    adc #1  ; TODO: OFF BY ONE ERROR!!!
+    adc scroll_x
+    cmp platform_x0, x  ; C = pos_x + scroll_x >= x0(p)
+    bcc @end_platform_check
+
+    ; Skip if x > x0
+    ; NOTE: For now, we want checks to be inclusive (pos_x + scroll_x > x1(p)).
+    ;   But is because we only have a single 0..255 screen.
+    ;   If we ever get a global map, then maybe this can be wiped.
+    ; NOTE: Assume A = pos_x + scroll_x
+    cmp platform_x1, x  ; C = pos_x + scroll_x >= x1(p)
+    beq :+              ; If Z, skip check
+    bcs @end_platform_check
+:
+
+    ; Have we crossed y0?
+    ; NOTE: Load platform_y0, then only need one lda?
+
+    ; Skip if we were already below y0(p) (pos_y > y0(p))
+    lda pos_y+1
+    cmp platform_y0, x  ; C = pos_y >= y0(p)
+    bcs @end_platform_check
+
+    ; Skip if the updated y_pos is still above y0(p) (next_y < y0(p))
+    lda next_y
+    cmp platform_y0, x  ; C = next_y >= y0(p)
+    bcc @end_platform_check
+
+    sec
+    lda platform_y0, x
+    ; Stay one point above the platform
+    ; TODO: Maybe define so that y0 is where you stop, rather than the ground?
+    sbc #1
+
+    ; Keep the highest crossed platform so collision does not depend on list
+    ; order. Positive y is downward, so smaller y is closer to the start point.
+    ldy platform_hit
+    beq @store_hit
+    cmp platform_hit_y
+    bcs @end_platform_check
+
+@store_hit:
+    sta platform_hit_y
+    lda #1
+    sta platform_hit
 
 @end_platform_check:
-    iny
+    inx
     jmp @platform_loop
 
 @end_platform_loop:
