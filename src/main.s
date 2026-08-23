@@ -25,6 +25,10 @@
 .exportzp arg1
 .exportzp arg2
 
+; Scrolling frame parameters
+X_FRAME_MIN = 96
+X_FRAME_MAX = 160
+
 ; Sprite positions
 .segment "ZEROPAGE"
     frame: .res 1
@@ -177,9 +181,9 @@ main:
     lda buttons
     and #%00000001
     beq @skip_right
-    lda #160
-    cmp pos_x   ; C = pos_x <= A
-    bcc @right_scroll
+    lda pos_x
+    cmp #X_FRAME_MAX    ; C = pos_x >= 160
+    bcs @right_scroll   ; scroll if pos_x >= right_bound
 ;@right_move
     inc pos_x
     jmp @skip_right
@@ -199,8 +203,8 @@ main:
     and #%00000010
     beq @skip_left
     lda pos_x
-    cmp #96     ; C = pos_x >= A
-    bcc @left_scroll
+    cmp #X_FRAME_MIN+1  ; C = pos_x >= 96+1
+    bcc @left_scroll    ; scroll if pos_x < left_bound+1
 ;@left_move
     dec pos_x
     jmp @skip_left
