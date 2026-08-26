@@ -1,11 +1,7 @@
 .include "ppu.inc"
 
+.export init_bg
 .export render_bg
-
-; oh isnt this dumb
-; (This will be in CHR or something one day...)
-.export bg0
-.export bg1
 
 ; Function arguments
 .importzp arg0
@@ -97,6 +93,26 @@ bg1:
 
 .setcpu "6502"
 .segment "CODE"
+
+init_bg:
+    lda #<bg0
+    sta arg0
+    lda #>bg0
+    sta arg1
+    lda #$20
+    sta arg2
+    jsr render_bg
+
+    lda #<bg1
+    sta arg0
+    lda #>bg1
+    sta arg1
+    lda #$24
+    sta arg2
+    jsr render_bg
+
+    rts
+
 
 render_bg:
     ; Inputs

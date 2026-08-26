@@ -6,13 +6,7 @@
 .import init_jump
 .import update_jump
 .import init_platforms
-
-; Data
-; I am literally importing these things so that I can pass them back to bg.s
-; I'm sure this is silly but I just want to get it working for now.
-.import render_bg
-.import bg0
-.import bg1
+.import init_bg
 
 ; Needed by update_jump
 ; (Though perhaps it should be an input?)
@@ -57,24 +51,8 @@ X_FRAME_MAX = 160
 reset:
     INITIALIZE_NES
 
-    ;; Render background background
-
-    ; TODO: Just move this whole thing into bg.s
-    lda #<bg0
-    sta arg0
-    lda #>bg0
-    sta arg1
-    lda #$20
-    sta arg2
-    jsr render_bg
-
-    lda #<bg1
-    sta arg0
-    lda #>bg1
-    sta arg1
-    lda #$24
-    sta arg2
-    jsr render_bg
+    ;; Render background
+    jsr init_bg
 
     ;; Render a single sprite
 
