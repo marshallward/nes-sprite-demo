@@ -30,14 +30,18 @@ platform_data:
 platform_1:
     .byte 0, 255, 185
 platform_2:
-    .byte 120, 136, 137
+    .byte 120, 135, 137
 platform_3:
-    .byte 120, 136, 105
+    .byte 120, 135, 105
 platform_data_end:
 
 PLATFORM_STRIDE = platform_2 - platform_1
 NUM_PLATFORMS = (platform_data_end - platform_data) / PLATFORM_STRIDE
 
+; Pixel-collision: Which pixel (0..7) should we test on the left and right?
+; TODO: Define this in the sprite!
+PLAYER_FOOT_L_X = 2
+PLAYER_FOOT_R_X = 5
 
 .setcpu "6502"
 .segment "CODE"
@@ -63,25 +67,27 @@ apply_platform_collision:
     cpx #0
     beq @end_platform_loop
 
-    ; "Weak" test: Only collide if x0 < pos_x < x1
-    ; (The strong test requires a more complicated expression)
+    ; Collide if x0 <= x <= x1
 
-    ; Skip if x < x0
+    ; Pass through if x < x0
     clc
+    ; x = x_sprite + x_foot + x_coord
     lda pos_x
-    adc #1  ; TODO: OFF BY ONE ERROR!!!
+    adc #PLAYER_FOOT_R_X
     adc scroll_x
-    cmp platform_data, y    ; C = pos_x + scroll_x >= x0(p)
+    cmp platform_data, y    ; C = x >= x0(p)
     bcc @end_platform_check
 
-    ; Skip if x > x1
-    ; NOTE: For now, we want checks to be inclusive (pos_x + scroll_x > x1(p)).
-    ;   But is because we only have a single 0..255 screen.
-    ;   If we ever get a global map, then maybe this can be wiped.
-    ; NOTE: Assume A = pos_x + scroll_x
-    cmp platform_data+1, y  ; C = pos_x + scroll_x >= x1(p)
+    ; Pass through if x > x1
+    clc
+    ; x = x_sprite + x_foot + x_coord
+    lda pos_x
+    adc #PLAYER_FOOT_L_X
+    adc scroll_x
+    cmp platform_data+1, y  ; C = x >= x1(p)
     beq :+                  ; If Z, skip check
     bcs @end_platform_check
+    ; NOTE: Check if faster to offset + bcs, rather than beq + bcs
 :
 
     ; Now check if we have crossed y0
