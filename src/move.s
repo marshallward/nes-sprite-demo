@@ -1,4 +1,4 @@
-; Jump physics
+; Player movement physics
 
 ; For now take this address from main, but maybe it should be an input?
 .importzp pos_x
@@ -8,17 +8,21 @@
 .importzp platform_hit
 .importzp platform_hit_y
 
-; Jump management reads directly from `buttons`, but we could decouple it.
+; Movement reads directly from `buttons`, but we could decouple it.
 .importzp buttons
 
 .import apply_platform_collision
 
-.export init_jump
-.export update_jump
+.export init_move
+.export update_move
+.exportzp vel_x
 .exportzp next_y
 
-; These variables define "jump state", and could be passed as inputs.
+; These variables define movement state, and could be passed as inputs.
 .segment "ZEROPAGE"
+    ; Signed pixels/frame. Currently fixed to -1, 0, or 1.
+    vel_x: .res 1
+
     ; 8.8 px resolution
     vel_y: .res 2
     ; 0.8 resolution (acc is never >= 1 px/f)
@@ -31,6 +35,7 @@
 
     ; Set during jump, disables new jumps until landing.
     jump_latch: .res 1
+
 ; Jump parameters (positive is downward)
 VEL_JUMP_LO = 128
 VEL_JUMP_HI = <-4
@@ -39,13 +44,22 @@ G_UP = 60
 G_PRESS = 15
 G_DOWN = 60
 
+; Scrolling frame parameters
+X_FRAME_MIN = 96
+X_FRAME_MAX = 160
+
+; Fixed horizontal movement for now.
+VEL_X_RIGHT = 1
+VEL_X_LEFT = <-1
+
 
 .setcpu "6502"
 .segment "CODE"
 
-init_jump:
+init_move:
     ; Initialize kinematic state
     lda #0
+    sta vel_x
     sta vel_y
     sta vel_y+1
     sta acc_y
@@ -85,6 +99,81 @@ init_jump:
     ;     latch = 1
     ;
     ; @apply_accel
+
+update_move:
+    jsr update_x
+    jsr update_jump
+    rts
+
+
+update_x:
+    lda #0
+    sta vel_x
+
+    ; Set fixed velocity from left/right input.
+    lda buttons
+    and #%00000001
+    beq @check_left
+    lda #VEL_X_RIGHT
+    sta vel_x
+
+@check_left:
+    lda buttons
+    and #%00000010
+    beq @apply_x
+    lda vel_x
+    bne @both_x
+    lda #VEL_X_LEFT
+    sta vel_x
+    jmp @apply_x
+
+@both_x:
+    lda #0
+    sta vel_x
+
+@apply_x:
+    lda vel_x
+    beq @end_x
+    bmi @move_left
+
+@move_right:
+    lda pos_x
+    cmp #X_FRAME_MAX    ; C = pos_x >= right_bound
+    bcs @right_scroll   ; scroll if pos_x >= right_bound
+    inc pos_x
+    rts
+
+@right_scroll:
+    clc
+    lda scroll_x
+    adc #1
+    sta scroll_x
+    bcc @end_x
+    lda ntable
+    eor #1
+    sta ntable
+    rts
+
+@move_left:
+    lda pos_x
+    cmp #X_FRAME_MIN+1  ; C = pos_x >= left_bound+1
+    bcc @left_scroll    ; scroll if pos_x < left_bound+1
+    dec pos_x
+    rts
+
+@left_scroll:
+    sec
+    lda scroll_x
+    sbc #1
+    sta scroll_x
+    bcs @end_x
+    lda ntable
+    eor #1
+    sta ntable
+
+@end_x:
+    rts
+
 
 update_jump:
     ; Is velocity upward?

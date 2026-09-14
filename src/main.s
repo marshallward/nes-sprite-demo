@@ -3,12 +3,12 @@
 
 .importzp buttons
 .import read_joypad1
-.import init_jump
-.import update_jump
+.import init_move
+.import update_move
 .import init_platforms
 .import init_bg
 
-; Needed by update_jump
+; Needed by update_move
 ; (Though perhaps it should be an input?)
 .exportzp pos_x
 .exportzp pos_y
@@ -18,10 +18,6 @@
 .exportzp arg0
 .exportzp arg1
 .exportzp arg2
-
-; Scrolling frame parameters
-X_FRAME_MIN = 96
-X_FRAME_MAX = 160
 
 ; Sprite positions
 .segment "ZEROPAGE"
@@ -125,9 +121,8 @@ reset:
     lda #0
     sta frame
 
-    ; Initialize kinematic state
-    ; This is only needed because we don't pass vel_y and acc_y!
-    jsr init_jump
+    ; Initialize movement state
+    jsr init_move
 
     ; Initialize active platform data
     jsr init_platforms
@@ -146,59 +141,12 @@ main:
     lda #0
     sta frame
 
-
     ;; Update controller
 
     ; Read controller
     jsr read_joypad1
 
-    ; TODO: Move left-right logic to jump.s
-    ;   (And rename jump.s to move or something!)
-
-    ; Check Right
-    lda buttons
-    and #%00000001
-    beq @skip_right
-    lda pos_x
-    cmp #X_FRAME_MAX    ; C = pos_x >= 160
-    bcs @right_scroll   ; scroll if pos_x >= right_bound
-;@right_move
-    inc pos_x
-    jmp @skip_right
-@right_scroll:
-    clc
-    lda scroll_x
-    adc #1
-    sta scroll_x
-    bcc :+
-    lda ntable
-    eor #1
-    sta ntable
-@skip_right:
-
-    ; Check Left
-    lda buttons
-    and #%00000010
-    beq @skip_left
-    lda pos_x
-    cmp #X_FRAME_MIN+1  ; C = pos_x >= 96+1
-    bcc @left_scroll    ; scroll if pos_x < left_bound+1
-;@left_move
-    dec pos_x
-    jmp @skip_left
-@left_scroll:
-    sec
-    lda scroll_x
-    sbc #1
-    sta scroll_x
-    bcs :+
-    lda ntable
-    eor #1
-    sta ntable
-:
-@skip_left:
-
-    jsr update_jump
+    jsr update_move
 
     ;; Transfer positions to OAM buffer
     lda pos_y+1

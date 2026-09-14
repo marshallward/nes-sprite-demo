@@ -13,7 +13,7 @@ CHR = $(BUILD)/chr.bin
 NES = $(BUILD)/jump.nes
 
 # TODO: Automate?
-OBJECTS = $(BUILD)/main.o $(BUILD)/pad.o $(BUILD)/bg.o $(BUILD)/jump.o \
+OBJECTS = $(BUILD)/main.o $(BUILD)/pad.o $(BUILD)/bg.o $(BUILD)/move.o \
 	$(BUILD)/platform.o $(BUILD)/header.o
 
 

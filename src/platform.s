@@ -1,6 +1,6 @@
 ; Platform data
 ;
-; Current runtime data used by jump.s for horizontal platform collision.
+; Current runtime data used by move.s for horizontal platform collision.
 ; See platform_dev.s for the more general platform-list sketch.
 
 .export init_platforms
