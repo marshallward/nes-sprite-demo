@@ -48,11 +48,6 @@ G_DOWN = 60
 X_FRAME_MIN = 96
 X_FRAME_MAX = 160
 
-; Fixed horizontal movement for now.
-VEL_X_RIGHT = 1
-VEL_X_LEFT = <-1
-
-
 .setcpu "6502"
 .segment "CODE"
 
@@ -66,40 +61,6 @@ init_move:
     sta jump_latch
     rts
 
-    ;; Jump kinematics
-
-    ; We only start a new jump if the last jump has completed.
-    ;
-    ; The conditions for completion are
-    ; 1. We have reached the ground (y <= GROUND)
-    ;   (TODO: ground collision detection)
-    ;   (DONE!)
-    ; 2. The button has been released (buttons && $40 = 0)
-    ;
-    ; We then release the latch.
-    ; So many conditions, lets just gather them:
-    ;   - button (i.e. B is pressed)
-    ;   - y > GROUND
-    ;   - v > 0
-    ;       - are we moving up or down?
-    ;       - v = 0 is a concern: ground? top of parabola?
-    ;   - latch is set
-
-    ; Pseudocode
-    ;
-    ; v > 0:
-    ;   button:
-    ;     g = g_press
-    ;   else:
-    ;     g = g_up
-    ; else (v <= 0):
-    ;   g = g_down
-    ;   if no latch and no button and y >= 160:
-    ;     v = v0
-    ;     latch = 1
-    ;
-    ; @apply_accel
-
 update_move:
     jsr update_x
     jsr update_jump
@@ -110,26 +71,17 @@ update_x:
     lda #0
     sta vel_x
 
-    ; Set fixed velocity from left/right input.
+    ; Opposing directions cancel by summing their signed contributions.
     lda buttons
     and #%00000001
     beq @check_left
-    lda #VEL_X_RIGHT
-    sta vel_x
+    inc vel_x
 
 @check_left:
     lda buttons
     and #%00000010
     beq @apply_x
-    lda vel_x
-    bne @both_x
-    lda #VEL_X_LEFT
-    sta vel_x
-    jmp @apply_x
-
-@both_x:
-    lda #0
-    sta vel_x
+    dec vel_x
 
 @apply_x:
     lda vel_x
@@ -174,6 +126,39 @@ update_x:
 @end_x:
     rts
 
+    ;; Jump kinematics
+
+    ; We only start a new jump if the last jump has completed.
+    ;
+    ; The conditions for completion are
+    ; 1. We have reached the ground (y <= GROUND)
+    ;   (TODO: ground collision detection)
+    ;   (DONE!)
+    ; 2. The button has been released (buttons && $40 = 0)
+    ;
+    ; We then release the latch.
+    ; So many conditions, lets just gather them:
+    ;   - button (i.e. B is pressed)
+    ;   - y > GROUND
+    ;   - v > 0
+    ;       - are we moving up or down?
+    ;       - v = 0 is a concern: ground? top of parabola?
+    ;   - latch is set
+
+    ; Pseudocode
+    ;
+    ; v > 0:
+    ;   button:
+    ;     g = g_press
+    ;   else:
+    ;     g = g_up
+    ; else (v <= 0):
+    ;   g = g_down
+    ;   if no latch and no button and y >= 160:
+    ;     v = v0
+    ;     latch = 1
+    ;
+    ; @apply_accel
 
 update_jump:
     ; Is velocity upward?
