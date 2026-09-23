@@ -97,19 +97,27 @@ update_x:
 
     lda vel_x
     beq @end_x
-    bmi @move_left
 
-@move_right:
-    inc next_x
+    clc
     lda next_x
+    adc vel_x
+    sta next_x
     sta pos_x
 
-    ; Scroll if the translated screen position moved beyond the frame.
+@update_camera:
+    ; Keep the translated screen position inside the frame.
+    lda pos_x
     sec
     sbc scroll_x
     cmp #X_FRAME_MAX+1
-    bcc @end_x
+    bcs @scroll_right
 
+    cmp #X_FRAME_MIN
+    bcc @scroll_left
+
+    rts
+
+@scroll_right:
     clc
     lda scroll_x
     adc #1
@@ -120,17 +128,7 @@ update_x:
     sta ntable
     rts
 
-@move_left:
-    dec next_x
-    lda next_x
-    sta pos_x
-
-    ; Scroll if the translated screen position moved beyond the frame.
-    sec
-    sbc scroll_x
-    cmp #X_FRAME_MIN
-    bcs @end_x
-
+@scroll_left:
     sec
     lda scroll_x
     sbc #1
