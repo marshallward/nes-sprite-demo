@@ -12,7 +12,7 @@
 ; (Though perhaps it should be an input?)
 .exportzp pos_x
 .exportzp pos_y
-.exportzp scroll_x
+.exportzp camera_x
 .exportzp ntable
 
 .exportzp arg0
@@ -28,8 +28,9 @@
     ; 8.8 pixel resolution
     pos_y: .res 2
 
-    ; Map position (I think...)
-    scroll_x: .res 1
+    ; Camera/world x coordinate shown at screen x=0.
+    ; The low byte is written to PPUSCROLL during NMI.
+    camera_x: .res 1
 
     ; Current nametable (0 or 1)
     ; NOTE: This almost acts as an upper byte of position.  Look into it...
@@ -127,9 +128,9 @@ reset:
     ; Initialize active platform data
     jsr init_platforms
 
-    ; Initialize scrolling
+    ; Initialize camera position
     lda #0
-    sta scroll_x
+    sta camera_x
 
 main:
     ; Wait for vblank NMI to complete (defined below)
@@ -152,7 +153,7 @@ main:
     sta $0200
     sec
     lda pos_x
-    sbc scroll_x
+    sbc camera_x
     sta $0203
 
     ; Reset game loop
@@ -168,8 +169,8 @@ nmi:
     lda #$02
     sta OAMDMA
 
-    ; Update scroll
-    lda scroll_x
+    ; Update hardware scroll from camera position
+    lda camera_x
     sta PPUSCROLL
     lda #0
     sta PPUSCROLL

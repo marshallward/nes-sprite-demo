@@ -3,7 +3,7 @@
 ; For now take this address from main, but maybe it should be an input?
 .importzp pos_x
 .importzp pos_y
-.importzp scroll_x
+.importzp camera_x
 .importzp ntable
 .importzp platform_hit
 .importzp platform_hit_y
@@ -108,7 +108,7 @@ update_x:
     ; Keep the translated screen position inside the frame.
     lda pos_x
     sec
-    sbc scroll_x
+    sbc camera_x
     cmp #X_FRAME_MAX+1
     bcs @scroll_right
 
@@ -119,9 +119,9 @@ update_x:
 
 @scroll_right:
     clc
-    lda scroll_x
+    lda camera_x
     adc #1
-    sta scroll_x
+    sta camera_x
     bcc @end_x
     lda ntable
     eor #1
@@ -130,9 +130,9 @@ update_x:
 
 @scroll_left:
     sec
-    lda scroll_x
+    lda camera_x
     sbc #1
-    sta scroll_x
+    sta camera_x
     bcs @end_x
     lda ntable
     eor #1
