@@ -16,12 +16,16 @@
 .export init_move
 .export update_move
 .exportzp vel_x
+.exportzp next_x
 .exportzp next_y
 
 ; These variables define movement state, and could be passed as inputs.
 .segment "ZEROPAGE"
     ; Signed pixels/frame. Currently fixed to -1, 0, or 1.
     vel_x: .res 1
+
+    ; x_pos precompute, to check if a wall has been crossed.
+    next_x: .res 1
 
     ; 8.8 px resolution
     vel_y: .res 2
@@ -59,6 +63,7 @@ init_move:
     sta vel_y+1
     sta acc_y
     sta jump_latch
+    sta next_x
     rts
 
 
@@ -87,6 +92,9 @@ update_x:
     ; NOTE: vel_x is zero if both 01 and 10 are pressed
 
 @apply_x:
+    lda pos_x
+    sta next_x
+
     lda vel_x
     beq @end_x
     bmi @move_left
@@ -95,7 +103,9 @@ update_x:
     lda pos_x
     cmp #X_FRAME_MAX    ; C = pos_x >= right_bound
     bcs @right_scroll   ; scroll if pos_x >= right_bound
-    inc pos_x
+    inc next_x
+    lda next_x
+    sta pos_x
     rts
 
 @right_scroll:
@@ -113,7 +123,9 @@ update_x:
     lda pos_x
     cmp #X_FRAME_MIN+1  ; C = pos_x >= left_bound+1
     bcc @left_scroll    ; scroll if pos_x < left_bound+1
-    dec pos_x
+    dec next_x
+    lda next_x
+    sta pos_x
     rts
 
 @left_scroll:
