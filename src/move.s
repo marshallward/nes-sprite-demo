@@ -100,15 +100,16 @@ update_x:
     bmi @move_left
 
 @move_right:
-    lda pos_x
-    cmp #X_FRAME_MAX    ; C = pos_x >= right_bound
-    bcs @right_scroll   ; scroll if pos_x >= right_bound
     inc next_x
     lda next_x
     sta pos_x
-    rts
 
-@right_scroll:
+    ; Scroll if the translated screen position moved beyond the frame.
+    sec
+    sbc scroll_x
+    cmp #X_FRAME_MAX+1
+    bcc @end_x
+
     clc
     lda scroll_x
     adc #1
@@ -120,15 +121,16 @@ update_x:
     rts
 
 @move_left:
-    lda pos_x
-    cmp #X_FRAME_MIN+1  ; C = pos_x >= left_bound+1
-    bcc @left_scroll    ; scroll if pos_x < left_bound+1
     dec next_x
     lda next_x
     sta pos_x
-    rts
 
-@left_scroll:
+    ; Scroll if the translated screen position moved beyond the frame.
+    sec
+    sbc scroll_x
+    cmp #X_FRAME_MIN
+    bcs @end_x
+
     sec
     lda scroll_x
     sbc #1

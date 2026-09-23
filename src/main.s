@@ -150,7 +150,9 @@ main:
     ; Transfer positions to OAM buffer
     lda pos_y+1
     sta $0200
+    sec
     lda pos_x
+    sbc scroll_x
     sta $0203
 
     ; Reset game loop

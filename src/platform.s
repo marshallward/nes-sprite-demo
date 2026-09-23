@@ -11,7 +11,6 @@
 
 .importzp pos_x
 .importzp pos_y
-.importzp scroll_x
 .importzp next_y
 
 .segment "ZEROPAGE"
@@ -71,19 +70,17 @@ apply_platform_collision:
 
     ; Pass through if x < x0
     clc
-    ; x = x_sprite + x_foot + x_coord
+    ; x = x_world + x_foot
     lda pos_x
     adc #PLAYER_FOOT_R_X
-    adc scroll_x
     cmp platform_data, y    ; C = x >= x0(p)
     bcc @end_platform_check
 
     ; Pass through if x > x1
     clc
-    ; x = x_sprite + x_foot + x_coord
+    ; x = x_world + x_foot
     lda pos_x
     adc #PLAYER_FOOT_L_X
-    adc scroll_x
     cmp platform_data+1, y  ; C = x >= x1(p)
     beq :+                  ; If Z, skip check
     bcs @end_platform_check
