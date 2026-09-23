@@ -61,6 +61,7 @@ init_move:
     sta jump_latch
     rts
 
+
 update_move:
     jsr update_x
     jsr update_jump
@@ -71,17 +72,19 @@ update_x:
     lda #0
     sta vel_x
 
-    ; Opposing directions cancel by summing their signed contributions.
+@check_right:
     lda buttons
-    and #%00000001
+    and #%00000001  ; A = buttons && 01
     beq @check_left
     inc vel_x
 
 @check_left:
     lda buttons
-    and #%00000010
+    and #%00000010  ; A = buttons && 10
     beq @apply_x
     dec vel_x
+
+    ; NOTE: vel_x is zero if both 01 and 10 are pressed
 
 @apply_x:
     lda vel_x

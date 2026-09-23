@@ -141,20 +141,19 @@ main:
     lda #0
     sta frame
 
-    ;; Update controller
-
     ; Read controller
     jsr read_joypad1
 
+    ; Update position
     jsr update_move
 
-    ;; Transfer positions to OAM buffer
+    ; Transfer positions to OAM buffer
     lda pos_y+1
     sta $0200
     lda pos_x
     sta $0203
 
-    ;; Reset game loop
+    ; Reset game loop
     jmp main
 
 
