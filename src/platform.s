@@ -24,14 +24,17 @@ platform_hit_y:
 
 .segment "RODATA"
 
-; Horizontal platform records: x0, x1, y
+PLATFORM_FLAT = 0
+
+; Platform records: type, start, end, height.
+; Only flat platforms are supported: start/end are x0/x1, height is y.
 platform_data:
 platform_1:
-    .byte 0, 255, 185
+    .byte PLATFORM_FLAT, 0, 255, 185
 platform_2:
-    .byte 120, 135, 137
+    .byte PLATFORM_FLAT, 120, 135, 137
 platform_3:
-    .byte 120, 135, 105
+    .byte PLATFORM_FLAT, 120, 135, 105
 platform_data_end:
 
 PLATFORM_STRIDE = platform_2 - platform_1
@@ -66,6 +69,11 @@ apply_platform_collision:
     cpx #0
     beq @end_platform_loop
 
+    ; Leave other platform types for later steps.
+    lda platform_data, y
+    cmp #PLATFORM_FLAT
+    bne @end_platform_check
+
     ; Collide if x0 <= x <= x1
 
     ; Pass through if x < x0
@@ -73,7 +81,7 @@ apply_platform_collision:
     ; x = x_world + x_foot
     lda pos_x
     adc #PLAYER_FOOT_R_X
-    cmp platform_data, y    ; C = x >= x0(p)
+    cmp platform_data+1, y  ; C = x >= x0(p)
     bcc @end_platform_check
 
     ; Pass through if x > x1
@@ -81,7 +89,7 @@ apply_platform_collision:
     ; x = x_world + x_foot
     lda pos_x
     adc #PLAYER_FOOT_L_X
-    cmp platform_data+1, y  ; C = x >= x1(p)
+    cmp platform_data+2, y  ; C = x >= x1(p)
     beq :+                  ; If Z, skip check
     bcs @end_platform_check
     ; NOTE: Check if faster to offset + bcs, rather than beq + bcs
@@ -91,16 +99,16 @@ apply_platform_collision:
 
     ; Skip if we were already below y0(p) (pos_y > y0(p))
     lda pos_y+1
-    cmp platform_data+2, y  ; C = pos_y >= y0(p)
+    cmp platform_data+3, y  ; C = pos_y >= y0(p)
     bcs @end_platform_check
 
     ; Skip if the updated y_pos is still above y0(p) (next_y < y0(p))
     lda next_y
-    cmp platform_data+2, y  ; C = next_y >= y0(p)
+    cmp platform_data+3, y  ; C = next_y >= y0(p)
     bcc @end_platform_check
 
     sec
-    lda platform_data+2, y
+    lda platform_data+3, y
     ; Stay one point above the platform
     ; TODO: Maybe define so that y0 is where you stop, rather than the ground?
     sbc #1

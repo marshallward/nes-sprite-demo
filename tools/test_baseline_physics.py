@@ -13,6 +13,7 @@ from py65.devices.mpu6502 import MPU
 
 ROOT = Path(__file__).resolve().parents[1]
 JUMP, LEFT, RIGHT = 0x80, 0x02, 0x01
+PLATFORM_FLAT = 0
 
 
 class BaselinePhysicsTests(unittest.TestCase):
@@ -80,10 +81,11 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.call("update_move")
 
     def platforms(self, *records):
+        """Encode flat platforms from (start, end, height) test tuples."""
         # Test-only writes to emulated ROM, not the on-disk game data.
         self.assertLessEqual(len(records), 3)
         address = self.symbols["platform_data"]
-        data = [value for record in records for value in record]
+        data = [value for record in records for value in (PLATFORM_FLAT, *record)]
         self.cpu.memory[address:address + len(data)] = data
         self.put("platform_count", len(records))
 
