@@ -18,6 +18,7 @@
 .export init_move
 .export update_move
 .exportzp vel_x
+.exportzp vel_y
 .exportzp next_x
 .exportzp next_y
 

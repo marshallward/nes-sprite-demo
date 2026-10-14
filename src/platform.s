@@ -16,6 +16,7 @@
 .importzp pos_y
 .importzp next_y
 .importzp vel_x
+.importzp vel_y
 
 .segment "ZEROPAGE"
 
@@ -148,11 +149,25 @@ apply_platform_collision:
     cmp contact_y
     bcs @end_platform_check
 
-    ; Skip if the proposed body bottom is still above the surface.
+    ; A downward crossing is a floor hit.
     lda next_y+1
     cmp contact_y
-    bcc @end_platform_check
+    bcs @floor_contact
 
+    ; Standing on the floor also counts as contact, even before gravity moves
+    ; a whole pixel. This lets a released jump rearm on any standing update.
+    ; Do not attach an upward-moving player or one still above this floor.
+    lda vel_y+1
+    bmi @end_platform_check
+    lda contact_y
+    sec
+    sbc #1
+    cmp pos_y+1
+    bne @end_platform_check
+    cmp next_y+1
+    bne @end_platform_check
+
+@floor_contact:
     sec
     lda platform_data+3, y
     ; Correct player Y so the body bottom is one pixel above the map surface.

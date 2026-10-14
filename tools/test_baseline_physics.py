@@ -300,10 +300,12 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.platforms((0, 3, 144))
         self.assertEqual(self.collision(254, 136, 137), 0)
 
-    def test_crossing_requires_old_y_above_and_new_y_at_or_below(self):
+    def test_floor_accepts_downward_crossing_or_resting_contact(self):
         self.platforms((120, 135, 144))
         for old, new, hit in (
-            (136, 136, 0),
+            (135, 135, 0),
+            (135, 136, 0),
+            (136, 136, 1),
             (136, 137, 1),
             (136, 145, 1),
             (137, 145, 0),
@@ -311,6 +313,11 @@ class BaselinePhysicsTests(unittest.TestCase):
         ):
             with self.subTest(old=old, new=new):
                 self.assertEqual(self.collision(124, old, new), hit)
+
+    def test_upward_subpixel_motion_does_not_attach_to_floor(self):
+        self.platforms((120, 135, 144))
+        self.velocity(-1)
+        self.assertEqual(self.collision(124, 136, 136), 0)
 
     def test_floor_surface_y_uses_explicit_player_bottom_offset(self):
         for surface in (112, 144, 160, 192):
@@ -365,7 +372,10 @@ class BaselinePhysicsTests(unittest.TestCase):
             self.frame()
             self.assertEqual(self.get("pos_y", 1), 184)
             self.assertEqual(self.get("pos_y", 1) + 7, 191)
-        # Fractional Y/velocity need not be zero between collision frames.
+            self.assertEqual(self.get("hit_y"), 1)
+            self.assertEqual(self.get("vel_y"), 0)
+            self.assertEqual(self.get("vel_y", 1), 0)
+        # Fractional Y is preserved, but resting contact resets velocity each update.
 
     def test_platform_overlap_uses_proposed_horizontal_position(self):
         self.platforms((120, 135, 144))
@@ -477,19 +487,58 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.assertEqual(landed, landing_frame)
                 self.assertEqual(self.jump_state(), landing_state)
 
-    def test_release_on_ground_waits_for_collision_to_clear_latch(self):
+    def test_release_on_ground_clears_latch_in_one_update(self):
         self.platforms((0, 255, 192))
         self.position(124, 184)
         self.put("jump_latch", 1)
-        for _ in range(2):
-            self.frame()
-            self.assertEqual(self.get("hit_y"), 0)
-            self.assertEqual(self.get("jump_latch"), 1)
         self.frame()
         self.assertEqual(self.get("hit_y"), 1)
         self.assertEqual(self.get("jump_latch"), 0)
+        self.frame(JUMP)
+        self.assertGreaterEqual(self.get("vel_y", 1), 128)
+        self.assertLess(self.get("pos_y", 1), 184)
 
-    def test_jump_latch_rearms_only_on_a_released_landing(self):
+    def test_turbo_has_no_latch_delay_after_grounded_release(self):
+        for pulse in (1, 2, 3, 4, 6, 8):
+            for phase in range(2*pulse):
+                with self.subTest(pulse=pulse, phase=phase):
+                    self.call("init_move")
+                    self.platforms((0, 255, 192))
+                    self.position(48, 184)
+                    launches = 0
+                    for frame in range(600):
+                        pressed = (frame + phase) % (2*pulse) < pulse
+                        old_y = self.get("pos_y", 1)
+                        old_latch = self.get("jump_latch")
+                        self.frame(JUMP if pressed else 0)
+                        if old_y == 184 and pressed and not old_latch:
+                            self.assertLess(self.get("pos_y", 1), 184)
+                            self.assertGreaterEqual(self.get("vel_y", 1), 128)
+                            launches += 1
+                        if old_y == 184 and self.get("pos_y", 1) == 184 and not pressed:
+                            self.assertEqual(self.get("hit_y"), 1)
+                            self.assertEqual(self.get("jump_latch"), 0)
+                    self.assertGreater(launches, 5)
+
+    def test_airborne_release_and_repress_do_not_apply_another_impulse(self):
+        self.platforms((0, 255, 192))
+        self.position(48, 184)
+        self.frame(JUMP)
+        landed = False
+        for frame in range(120):
+            pressed = frame % 2 == 1
+            old_v = self.get("vel_y") | (self.get("vel_y", 1) << 8)
+            gravity = 15 if old_v >= 0x8000 and pressed else 60
+            self.frame(JUMP if pressed else 0)
+            if self.get("hit_y"):
+                landed = True
+                break
+            self.assertEqual(self.get("jump_latch"), 1)
+            new_v = self.get("vel_y") | (self.get("vel_y", 1) << 8)
+            self.assertEqual(new_v, (old_v + gravity) & 0xFFFF)
+        self.assertTrue(landed)
+
+    def test_held_jump_does_not_bounce_and_ground_release_rearms(self):
         self.platforms((0, 255, 192))
         self.position(124, 184)
         self.frame(JUMP)
@@ -498,9 +547,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.assertEqual(self.get("pos_y", 1), 184)
         self.assertEqual(self.get("jump_latch"), 1)
         self.frame()
-        # Release alone need not clear the latch until another collision.
-        for _ in range(5):
-            self.frame()
+        # Resting contact now allows release to rearm immediately.
         self.assertEqual(self.get("jump_latch"), 0)
         self.frame(JUMP)
         self.assertGreaterEqual(self.get("vel_y", 1), 128)
