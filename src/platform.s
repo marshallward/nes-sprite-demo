@@ -29,36 +29,32 @@ hit_x:
     .res 1
 hit_x_position:
     .res 1                  ; corrected player X of the nearest wall candidate
+contact_y:
+    .res 1                  ; player Y at which the bottom reaches this floor
 
 .segment "RODATA"
 
 PLATFORM_FLAT = 0
 PLATFORM_WALL = $FF
 
-; XXX: There is a bug in platform height which (I think) accounts for the
-; sprite offset, rather than the absolute map.  These offsets are baked into
-; the numbers right now but need to be fixed.
-; e.g. top platform is 105 = 8*13+1, but graphically it appears at 8*14.
-
 ; Platform records: type, start, end, height.
-; Flat: inclusive x0, x1, y. Wall: inclusive y0, y1, x.
+; - Flat: (start,end) = (x0, x1), height = y
+; - Wall: (start,end) = (y0, y1), height = x
 platform_data:
 platform_1:
-    ; Left lower floor; the raised ledge begins at X=160.
-    .byte PLATFORM_FLAT, 0, 255, 185
+    ; Continuous ground, including underneath the raised ledge.
+    .byte PLATFORM_FLAT, 0, 255, 192
 platform_2:
-    .byte PLATFORM_FLAT, 120, 135, 137
+    .byte PLATFORM_FLAT, 120, 135, 144
 platform_3:
-    .byte PLATFORM_FLAT, 120, 135, 105
+    .byte PLATFORM_FLAT, 120, 135, 112
 platform_4:
-    ; Raised ledge: left side, top, right side, then the right lower floor.
+    ; Raised ledge: left side, top, right side.
     ; Its map tiles occupy X=160..191, Y=160..191.
-    ; Floor checks use OAM Y origin: landing at 152-1 puts the last sprite
-    ; row at 159, just above the drawn top. Do not change floor geometry here.
-    ; Side bottoms extend below the inherited lower-floor contact convention.
+    ; Wall bounds are unchanged pending a separate body-alignment review.
     .byte PLATFORM_WALL, 161, 200, 160
 platform_5:
-    .byte PLATFORM_FLAT, 160, 191, 153
+    .byte PLATFORM_FLAT, 160, 191, 160
 platform_6:
     .byte PLATFORM_WALL, 161, 200, 191
 platform_data_end:
@@ -71,8 +67,12 @@ NUM_PLATFORMS = (platform_data_end - platform_data) / PLATFORM_STRIDE
 PLAYER_FOOT_L_X = 2
 PLAYER_FOOT_R_X = 5
 
-; Wall-only body bounds. NES OAM Y is one row above the visible sprite.
-; The existing floor Y-origin/foot checks are deliberately unchanged.
+; Explicit floor contact geometry relative to OAM Y. Hardware starts the tile
+; at OAM Y+1; the ball's lowest opaque row is tile row 6, hence OAM Y+7.
+PLAYER_FOOT_BOTTOM_Y = 7
+
+; Wall-only body bounds relative to player Y.
+; Wall bounds are separate from floor contact and are unchanged in this patch.
 PLAYER_BODY_L_X = 2
 PLAYER_BODY_R_X = 5
 PLAYER_BODY_TOP_Y = 1
@@ -135,38 +135,43 @@ apply_platform_collision:
     ; NOTE: Check if faster to offset + bcs, rather than beq + bcs
 :
 
-    ; Now check if we have crossed y0
+    ; Calculate player Y at which the bottom reaches the floor. Equivalent to
+    ; comparing player bottom (player Y + PLAYER_FOOT_BOTTOM_Y) with surface Y,
+    ; but avoids wrapping a body-offset addition near the bottom of the page.
+    sec
+    lda platform_data+3, y
+    sbc #PLAYER_FOOT_BOTTOM_Y
+    sta contact_y
 
-    ; Skip if we were already below y0(p) (pos_y > y0(p))
+    ; Skip if the old body bottom was already at or below the surface.
     lda pos_y+1
-    cmp platform_data+3, y  ; C = pos_y >= y0(p)
+    cmp contact_y
     bcs @end_platform_check
 
-    ; Skip if the updated y_pos is still above y0(p) (next_y < y0(p))
+    ; Skip if the proposed body bottom is still above the surface.
     lda next_y+1
-    cmp platform_data+3, y  ; C = next_y >= y0(p)
+    cmp contact_y
     bcc @end_platform_check
 
     sec
     lda platform_data+3, y
-    ; Stay one point above the platform
-    ; TODO: Maybe define so that y0 is where you stop, rather than the ground?
-    sbc #1
+    ; Correct player Y so the body bottom is one pixel above the map surface.
+    sbc #PLAYER_FOOT_BOTTOM_Y+1
 
     ; Keep the highest crossed platform so collision does not depend on list
     ; order. Positive y is downward, so smaller y is closer to the start point.
     pha
     lda hit_y               ; Set Z if no recorded collision
     beq @store_first_hit    ; If set, compare y to cached hit_y_position
-    pla                     ; A = y0
-    cmp hit_y_position      ; C = (A >= y0)
-    bcs @end_platform_check ; if A below y0, then use y0 (skip store_hit)
-    jmp @store_hit          ; Update hit_y_position to y0
+    pla                     ; A = player Y adjusted to stand on this platform
+    cmp hit_y_position      ; C = candidate >= stored corrected Y
+    bcs @end_platform_check ; keep the higher/closer floor already recorded
+    jmp @store_hit          ; record the closer corrected player Y
 
 @store_first_hit:
     pla
 
-    ; Here, A = y regardless of the y-check.
+    ; Here, A = player Y adjusted to stand on this platform.
 
     ; If we're here, then we collide into y (either the first or highest)
 @store_hit:
