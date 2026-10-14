@@ -14,12 +14,12 @@ The layout is simple::
        # RAM
         ZP: start=$0000, size=$0100, type=rw;
        RAM: start=$0200, size=$0600, type=rw;
-   
+
        # ROM
        HDR: start=$0000, size=$0010, file=%O;
        PRG: start=$c000, size=$4000, file=%O, fill=yes, fillval=$ff;
    }
-   
+
    SEGMENTS {
        # RAM
        ZEROPAGE: load=ZP,  type=zp;
@@ -45,7 +45,7 @@ example:
 * ``lda $1234`` requires four cycles.
 
 Sometimes the zero page elements are called "registers", but the memory itself
-is no different from the rest of the on-chip memory.
+is physically no different from the rest of the on-chip memory.
 
 The region ``[$100:$1ff]`` is reserved for the processor's stack memory, which
 hold temporarily stored values and program counters.  It can be used for
