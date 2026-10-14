@@ -32,10 +32,9 @@
     ; 0.8 resolution (acc is never >= 1 px/f)
     acc_y: .res 1
 
-    ; y_pos precompute, to check if a platform has been crossed.
-    ; NOTE: This only need to be 8.0 precision, but I could imagine moving
-    ;   platforms be defined as subpixel.
-    next_y: .res 1
+    ; Proposed 8.8 Y, like pos_y: fractional byte first, integer byte second.
+    ; Keep pos_y unchanged until collision finishes.
+    next_y: .res 2
 
     ; Set during jump, disables new jumps until landing.
     jump_latch: .res 1
@@ -69,8 +68,18 @@ init_move:
 
 update_move:
     jsr update_x
-    jsr update_jump
-    rts
+    jsr update_y
+    jsr apply_move_collision
+
+    ; Commit the corrected proposal only after collision has used old position.
+    lda next_x
+    sta pos_x
+    lda next_y
+    sta pos_y
+    lda next_y+1
+    sta pos_y+1
+
+    jmp update_camera
 
 
 update_x:
@@ -102,10 +111,11 @@ update_x:
     lda next_x
     adc vel_x
     sta next_x
-    sta pos_x
+@end_x:
+    rts
 
-@update_camera:
-    ; Keep the translated screen position inside the frame.
+update_camera:
+    ; Catch up toward the frame even when the player is stationary.
     lda pos_x
     sec
     sbc camera_x
@@ -175,7 +185,7 @@ update_x:
     ;
     ; @apply_accel
 
-update_jump:
+update_y:
     ; Is velocity upward?
     lda vel_y+1
     bpl @jump_down      ; minus is up!
@@ -250,24 +260,26 @@ update_jump:
     ; Subpixel
     lda pos_y
     adc vel_y
-    sta pos_y
+    sta next_y
     ; Pixel
     lda pos_y+1
     adc vel_y+1
-    sta next_y
+    sta next_y+1
+    rts
 
     ; TODO: We might be able to avoid the need for next_y!
     ;   - We could apply the platform x-tests before computing pos_y+1
     ;   - We could then hold next_y in A for comparison tests.
     ;   ... or maybe not, but this seems plausible.
 
-    ; Apply platform correction to next_y
+apply_move_collision:
+    ; Correct integer Y only; preserve the proposed fractional byte in next_y.
     jsr apply_platform_collision
     lda platform_hit
     beq @skip_ground
 
     lda platform_hit_y
-    sta next_y
+    sta next_y+1
     lda #0
     sta vel_y
     sta vel_y+1
@@ -281,8 +293,4 @@ update_jump:
     sta jump_latch
 
 @skip_ground:
-    ; Finalize y_pos
-    lda next_y
-    sta pos_y+1
-
     rts

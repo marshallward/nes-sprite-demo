@@ -91,7 +91,8 @@ class BaselinePhysicsTests(unittest.TestCase):
 
     def collision(self, x, old_y, next_y):
         self.position(x, old_y)
-        self.put("next_y", next_y)
+        self.put("next_x", x)
+        self.put("next_y", next_y, 1)
         self.call("apply_platform_collision")
         return self.get("platform_hit")
 
@@ -180,13 +181,64 @@ class BaselinePhysicsTests(unittest.TestCase):
             self.assertEqual(self.get("pos_y", 1), 184)
         # Fractional Y/velocity need not be zero between collision frames.
 
-    def test_horizontal_commit_precedes_platform_test(self):
+    def test_platform_overlap_uses_proposed_horizontal_position(self):
         self.platforms((120, 135, 137))
         self.position(114, 136, fraction=250)
         self.frame(RIGHT)
         self.assertEqual(self.get("pos_x"), 115)
         self.assertEqual(self.get("platform_hit"), 1)
         self.assertEqual(self.get("pos_y", 1), 136)
+
+    def test_proposals_and_collision_preserve_original_position(self):
+        self.platforms((0, 255, 185))
+        self.position(124, 183, fraction=200)
+        self.velocity(256)
+        self.put("buttons", RIGHT)
+        self.call("update_x")
+        self.call("update_y")
+        self.assertEqual(self.get("pos_x"), 124)
+        self.assertEqual(self.get("pos_y", 1), 183)
+        self.assertEqual(self.get("pos_y"), 200)
+        self.assertEqual(self.get("next_x"), 125)
+        self.assertEqual(self.get("next_y", 1), 185)
+        self.assertEqual(self.get("next_y"), 4)
+        self.call("apply_move_collision")
+        self.assertEqual(self.get("next_y", 1), 184)
+        self.assertEqual(self.get("next_y"), 4)
+        self.assertEqual(self.get("pos_x"), 124)
+        self.assertEqual(self.get("pos_y", 1), 183)
+        self.assertEqual(self.get("pos_y"), 200)
+
+    def test_camera_follows_committed_x_with_existing_wrap_rules(self):
+        for x, camera, buttons, expected_x, expected_camera, expected_nt in (
+            (160, 0, RIGHT, 161, 1, 0),
+            (96, 0, LEFT, 95, 255, 1),
+            (159, 0, RIGHT, 160, 0, 0),
+            (95, 0, 0, 95, 255, 1),
+            (161, 0, 0, 161, 1, 0),
+            (124, 0, 0, 124, 0, 0),
+            (159, 255, RIGHT, 160, 0, 1),
+        ):
+            with self.subTest(x=x, camera=camera, buttons=buttons):
+                self.position(x, 160)
+                self.put("camera_x", camera)
+                self.put("ntable", 0)
+                self.frame(buttons)
+                self.assertEqual(self.get("pos_x"), expected_x)
+                self.assertEqual(self.get("camera_x"), expected_camera)
+                self.assertEqual(self.get("ntable"), expected_nt)
+
+    def test_camera_catches_up_to_stationary_player_then_stops(self):
+        for x, expected_camera, expected_nt in ((200, 40, 0), (92, 252, 1)):
+            with self.subTest(x=x):
+                self.position(x, 160)
+                self.put("camera_x", 0)
+                self.put("ntable", 0)
+                for _ in range(50):
+                    self.frame()
+                    self.assertEqual(self.get("pos_x"), x)
+                self.assertEqual(self.get("camera_x"), expected_camera)
+                self.assertEqual(self.get("ntable"), expected_nt)
 
     def test_walking_off_edge_begins_falling(self):
         self.platforms((120, 135, 137))

@@ -9,7 +9,7 @@
 .exportzp platform_hit
 .exportzp platform_hit_y
 
-.importzp pos_x
+.importzp next_x
 .importzp pos_y
 .importzp next_y
 
@@ -78,16 +78,16 @@ apply_platform_collision:
 
     ; Pass through if x < x0
     clc
-    ; x = x_world + x_foot
-    lda pos_x
+    ; x = proposed x_world + x_foot
+    lda next_x
     adc #PLAYER_FOOT_R_X
     cmp platform_data+1, y  ; C = x >= x0(p)
     bcc @end_platform_check
 
     ; Pass through if x > x1
     clc
-    ; x = x_world + x_foot
-    lda pos_x
+    ; x = proposed x_world + x_foot
+    lda next_x
     adc #PLAYER_FOOT_L_X
     cmp platform_data+2, y  ; C = x >= x1(p)
     beq :+                  ; If Z, skip check
@@ -103,7 +103,7 @@ apply_platform_collision:
     bcs @end_platform_check
 
     ; Skip if the updated y_pos is still above y0(p) (next_y < y0(p))
-    lda next_y
+    lda next_y+1
     cmp platform_data+3, y  ; C = next_y >= y0(p)
     bcc @end_platform_check
 
