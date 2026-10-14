@@ -53,13 +53,43 @@ bg0:
         .byte 0
     .endrepeat
 
-    ; Below us only sky
-    .repeat 32*5
+    ; One sky row below the lower floating platform (row 19).
+    .repeat 32
         .byte 0
     .endrepeat
 
-    ; Top soil
-    .repeat 32
+    ; Raised ledge top: row 20, columns 20..23 (X=160..191, Y=160).
+    .repeat 20
+        .byte 0
+    .endrepeat
+    .repeat 4
+        .byte 5
+    .endrepeat
+    .repeat 8
+        .byte 0
+    .endrepeat
+
+    ; Ledge body: rows 21..23. The existing solid dirt tile draws the sides.
+    .repeat 3
+        .repeat 20
+            .byte 0
+        .endrepeat
+        .repeat 4
+            .byte 2
+        .endrepeat
+        .repeat 8
+            .byte 0
+        .endrepeat
+    .endrepeat
+
+    ; Lower floors: row 24 (Y=192), with dirt under the raised ledge.
+    .repeat 20
+        .byte 5
+    .endrepeat
+    .repeat 4
+        .byte 2
+    .endrepeat
+    .repeat 8
         .byte 5
     .endrepeat
 
@@ -67,6 +97,8 @@ bg0:
     .repeat 32*5
         .byte 2
     .endrepeat
+bg0_end:
+.assert bg0_end - bg0 = 32*30, error, "Background must contain 30 rows of 32 tiles"
 
 
 ; Make a second, simple table

@@ -5,8 +5,10 @@
 .importzp pos_y
 .importzp camera_x
 .importzp ntable
-.importzp platform_hit
-.importzp platform_hit_y
+.importzp hit_y
+.importzp hit_y_position
+.importzp hit_x
+.importzp hit_x_position
 
 ; Movement reads directly from `buttons`, but we could decouple it.
 .importzp buttons
@@ -273,12 +275,21 @@ update_y:
     ;   ... or maybe not, but this seems plausible.
 
 apply_move_collision:
-    ; Correct integer Y only; preserve the proposed fractional byte in next_y.
+    ; Gather floor/wall candidates in one pass before applying corrections.
+    ; Mixed-contact ordering/remaining movement is a separate future step.
     jsr apply_platform_collision
-    lda platform_hit
+    lda hit_x
+    beq @check_floor
+    lda hit_x_position
+    sta next_x
+    lda #0
+    sta vel_x
+@check_floor:
+    ; Correct integer Y only; preserve the proposed fractional byte in next_y.
+    lda hit_y
     beq @skip_ground
 
-    lda platform_hit_y
+    lda hit_y_position
     sta next_y+1
     lda #0
     sta vel_y

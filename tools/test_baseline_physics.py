@@ -14,6 +14,7 @@ from py65.devices.mpu6502 import MPU
 ROOT = Path(__file__).resolve().parents[1]
 JUMP, LEFT, RIGHT = 0x80, 0x02, 0x01
 PLATFORM_FLAT = 0
+PLATFORM_WALL = 0xFF
 
 
 class BaselinePhysicsTests(unittest.TestCase):
@@ -41,6 +42,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         # Initialize movement and platform setup
         self.call("init_move")
         self.call("init_platforms")
+        self.platform_capacity = self.get("platform_count")
         self.position(124, 160)
 
     # Support functions
@@ -82,10 +84,14 @@ class BaselinePhysicsTests(unittest.TestCase):
 
     def platforms(self, *records):
         """Encode flat platforms from (start, end, height) test tuples."""
+        self.platform_records(*[(PLATFORM_FLAT, *record) for record in records])
+
+    def platform_records(self, *records):
+        """Supply explicit (type, start, end, height) records."""
         # Test-only writes to emulated ROM, not the on-disk game data.
-        self.assertLessEqual(len(records), 3)
+        self.assertLessEqual(len(records), self.platform_capacity)
         address = self.symbols["platform_data"]
-        data = [value for record in records for value in (PLATFORM_FLAT, *record)]
+        data = [value for record in records for value in record]
         self.cpu.memory[address:address + len(data)] = data
         self.put("platform_count", len(records))
 
@@ -94,7 +100,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.put("next_x", x)
         self.put("next_y", next_y, 1)
         self.call("apply_platform_collision")
-        return self.get("platform_hit")
+        return self.get("hit_y")
 
     def jump_state(self):
         return (
@@ -106,6 +112,164 @@ class BaselinePhysicsTests(unittest.TestCase):
         )
 
     # Unit tests
+
+    def test_wall_blocks_from_both_sides_and_clears_horizontal_velocity(self):
+        self.platform_records((PLATFORM_WALL, 96, 185, 145))
+        for x, buttons in ((139, RIGHT), (144, LEFT)):
+            with self.subTest(x=x, buttons=buttons):
+                self.position(x, 120)
+                self.frame(buttons)
+                self.assertEqual(self.get("pos_x"), x)
+                self.assertEqual(self.get("next_x"), x)
+                self.assertEqual(self.get("hit_x_position"), x)
+                self.assertEqual(self.get("hit_x"), 1)
+                self.assertEqual(self.get("vel_x"), 0)
+                self.assertEqual(self.get("hit_y"), 0)
+
+    def test_wall_vertical_overlap_includes_endpoints(self):
+        self.platform_records((PLATFORM_WALL, 96, 185, 145))
+        for y, hit in ((87, 0), (88, 1), (184, 1), (185, 0)):
+            with self.subTest(y=y):
+                self.position(139, y)
+                self.velocity(0)
+                self.frame(RIGHT)
+                self.assertEqual(self.get("hit_x"), hit)
+                self.assertEqual(self.get("pos_x"), 139 if hit else 140)
+
+    def test_wall_overlap_uses_proposed_vertical_position(self):
+        self.platform_records((PLATFORM_WALL, 96, 185, 145))
+        self.position(139, 87, fraction=250)
+        self.frame(RIGHT)
+        self.assertEqual(self.get("pos_y", 1), 88)
+        self.assertEqual(self.get("hit_x"), 1)
+        self.assertEqual(self.get("pos_x"), 139)
+
+    def test_moving_away_from_wall_is_not_blocked(self):
+        self.platform_records((PLATFORM_WALL, 96, 185, 145))
+        for x, buttons, expected in ((139, LEFT, 138), (144, RIGHT, 145)):
+            with self.subTest(x=x, buttons=buttons):
+                self.position(x, 120)
+                self.frame(buttons)
+                self.assertEqual(self.get("hit_x"), 0)
+                self.assertEqual(self.get("pos_x"), expected)
+
+    def test_wall_hit_clears_on_stationary_update(self):
+        self.platform_records((PLATFORM_WALL, 96, 185, 145))
+        self.position(139, 120)
+        self.frame(RIGHT)
+        self.assertEqual(self.get("hit_x"), 1)
+        self.frame()
+        self.assertEqual(self.get("hit_x"), 0)
+
+    def test_nearest_wall_candidate_is_independent_of_record_order(self):
+        for walls in ((145, 150), (150, 145)):
+            for old_x, proposed_x, velocity, corrected_x in (
+                (130, 155, 1, 139),
+                (160, 130, 255, 149),
+            ):
+                with self.subTest(walls=walls, velocity=velocity):
+                    self.platform_records(*[(PLATFORM_WALL, 96, 185, x) for x in walls])
+                    self.position(old_x, 120)
+                    self.put("next_x", proposed_x)
+                    self.put("next_y", 120, 1)
+                    self.put("vel_x", velocity)
+                    self.call("apply_platform_collision")
+                    self.assertEqual(self.get("hit_x"), 1)
+                    self.assertEqual(self.get("hit_x_position"), corrected_x)
+                    # Gathering candidates must not mutate the movement proposal.
+                    self.assertEqual(self.get("next_x"), proposed_x)
+                    self.assertEqual(self.get("pos_x"), old_x)
+                    self.assertEqual(self.get("vel_x"), velocity)
+
+    def test_floor_and_wall_records_share_one_list_in_either_order(self):
+        floor = (PLATFORM_FLAT, 0, 255, 185)
+        wall = (PLATFORM_WALL, 96, 185, 145)
+        for records in ((floor, wall), (wall, floor)):
+            with self.subTest(records=records):
+                self.platform_records(*records)
+                self.position(124, 183, fraction=200)
+                self.velocity(256)
+                self.frame()
+                self.assertEqual(self.get("pos_y", 1), 184)
+                self.assertEqual(self.get("hit_y"), 1)
+                self.assertEqual(self.get("hit_x"), 0)
+                self.position(139, 120)
+                self.velocity(0)
+                self.frame(RIGHT)
+                self.assertEqual(self.get("pos_x"), 139)
+                self.assertEqual(self.get("hit_x"), 1)
+                self.assertEqual(self.get("hit_y"), 0)
+
+    def test_default_ledge_left_side_blocks_rightward_walk(self):
+        for _ in range(40):
+            self.frame(RIGHT)
+        self.assertEqual(self.get("pos_x"), 154)
+        self.assertEqual(self.get("hit_x"), 1)
+
+    def test_default_ledge_right_side_blocks_leftward_walk(self):
+        self.position(210, 160)
+        for _ in range(40):
+            self.frame(LEFT)
+        self.assertEqual(self.get("pos_x"), 190)
+        self.assertEqual(self.get("hit_x"), 1)
+
+    def test_default_ledge_top_lands_above_drawn_surface(self):
+        self.position(172, 130)
+        for _ in range(30):
+            self.frame()
+        self.assertEqual(self.get("pos_y", 1), 151)
+        self.assertEqual(self.get("pos_y", 1) + 8, 159)
+
+    def test_default_ledge_top_can_be_walked_off(self):
+        self.position(180, 151)
+        for _ in range(30):
+            self.frame(RIGHT)
+        self.assertEqual(self.get("pos_x"), 210)
+        self.assertEqual(self.get("hit_x"), 0)
+        self.assertGreater(self.get("pos_y", 1), 151)
+
+    def test_player_can_jump_from_lower_floor_onto_ledge(self):
+        self.position(146, 184)
+        for _ in range(20):
+            self.frame(JUMP | RIGHT)
+        self.assertGreaterEqual(self.get("pos_x") + 2, 160)
+        self.assertLessEqual(self.get("pos_x") + 5, 191)
+        for _ in range(60):
+            self.frame()
+        self.assertEqual(self.get("pos_y", 1), 151)
+
+    def test_default_ledge_has_five_segments_plus_existing_floating_platforms(self):
+        address = self.symbols["platform_data"]
+        count = self.get("platform_count")
+        records = [tuple(self.cpu.memory[address+i*4:address+(i+1)*4]) for i in range(count)]
+        self.assertEqual(records, [
+            (PLATFORM_FLAT, 0, 159, 185),
+            (PLATFORM_FLAT, 120, 135, 137),
+            (PLATFORM_FLAT, 120, 135, 105),
+            (PLATFORM_WALL, 160, 200, 160),
+            (PLATFORM_FLAT, 160, 191, 152),
+            (PLATFORM_WALL, 160, 200, 191),
+            (PLATFORM_FLAT, 192, 255, 185),
+        ])
+
+    def test_background_tiles_draw_ledge_and_preserve_floating_platforms(self):
+        address = self.symbols["bg0"]
+        self.assertEqual(self.symbols["bg0_end"] - address, 32 * 30)
+        for row in range(30):
+            for col in range(32):
+                tile = 0
+                if row in (14, 18) and col in (15, 16):
+                    tile = 5
+                elif row == 20 and 20 <= col <= 23:
+                    tile = 5
+                elif 21 <= row <= 23 and 20 <= col <= 23:
+                    tile = 2
+                elif row == 24:
+                    tile = 2 if 20 <= col <= 23 else 5
+                elif row >= 25:
+                    tile = 2
+                self.assertEqual(self.cpu.memory[address + row*32 + col], tile,
+                                 f"background row={row}, col={col}")
 
     def test_horizontal_input(self):
         self.frame(RIGHT)
@@ -123,7 +287,18 @@ class BaselinePhysicsTests(unittest.TestCase):
             with self.subTest(x=x):
                 self.assertEqual(self.collision(x, 136, 137), hit)
                 if hit:
-                    self.assertEqual(self.get("platform_hit_y"), 136)
+                    self.assertEqual(self.get("hit_y_position"), 136)
+
+    def test_floor_rejects_wrapped_foot_coordinates(self):
+        self.platforms((0, 255, 137))
+        # X=250 gives a right foot at 255: valid, without overflow.
+        self.assertEqual(self.collision(250, 136, 137), 1)
+        for x in range(251, 256):
+            with self.subTest(x=x):
+                self.assertEqual(self.collision(x, 136, 137), 0)
+        # Wrapping both feet must not look like contact near the left edge.
+        self.platforms((0, 3, 137))
+        self.assertEqual(self.collision(254, 136, 137), 0)
 
     def test_crossing_requires_old_y_above_and_new_y_at_or_below(self):
         self.platforms((120, 135, 137))
@@ -142,7 +317,7 @@ class BaselinePhysicsTests(unittest.TestCase):
             with self.subTest(heights=heights):
                 self.platforms(*[(0, 255, y) for y in heights])
                 self.assertEqual(self.collision(124, 100, 190), 1)
-                self.assertEqual(self.get("platform_hit_y"), 104)
+                self.assertEqual(self.get("hit_y_position"), 104)
 
     def test_collision_uses_world_x_not_camera_x(self):
         self.platforms((120, 135, 137))
@@ -151,7 +326,7 @@ class BaselinePhysicsTests(unittest.TestCase):
 
     def test_empty_list_clears_hit(self):
         self.platforms()
-        self.put("platform_hit", 1)
+        self.put("hit_y", 1)
         self.assertEqual(self.collision(124, 136, 137), 0)
 
     def test_landing_corrects_integer_y_but_preserves_fraction(self):
@@ -186,7 +361,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.position(114, 136, fraction=250)
         self.frame(RIGHT)
         self.assertEqual(self.get("pos_x"), 115)
-        self.assertEqual(self.get("platform_hit"), 1)
+        self.assertEqual(self.get("hit_y"), 1)
         self.assertEqual(self.get("pos_y", 1), 136)
 
     def test_proposals_and_collision_preserve_original_position(self):
@@ -245,7 +420,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.position(133, 136, fraction=250)
         self.frame(RIGHT)
         self.assertEqual(self.get("pos_x"), 134)
-        self.assertEqual(self.get("platform_hit"), 0)
+        self.assertEqual(self.get("hit_y"), 0)
         self.assertEqual(self.get("pos_y", 1), 137)
 
     def test_initial_jump_frame_uses_downward_gravity_constant(self):
@@ -284,7 +459,7 @@ class BaselinePhysicsTests(unittest.TestCase):
                     y = self.get("pos_y", 1)
                     if y < minimum:
                         minimum, first_minimum = y, frame
-                    if self.get("platform_hit"):
+                    if self.get("hit_y"):
                         landed = frame
                         break
                 self.assertEqual((minimum, first_minimum), (apex_y, apex_frame))
@@ -297,10 +472,10 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.put("jump_latch", 1)
         for _ in range(2):
             self.frame()
-            self.assertEqual(self.get("platform_hit"), 0)
+            self.assertEqual(self.get("hit_y"), 0)
             self.assertEqual(self.get("jump_latch"), 1)
         self.frame()
-        self.assertEqual(self.get("platform_hit"), 1)
+        self.assertEqual(self.get("hit_y"), 1)
         self.assertEqual(self.get("jump_latch"), 0)
 
     def test_jump_latch_rearms_only_on_a_released_landing(self):
