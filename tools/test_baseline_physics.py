@@ -230,6 +230,42 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.assertEqual(self.get("hit_x"), 0)
         self.assertGreater(self.get("pos_y", 1), 152)
 
+    def test_walk_off_either_corner_and_reverse_cannot_enter_ledge(self):
+        # Reverse at each edge across several fractional-Y phases and delays.
+        # Move to the edge rather than assuming the old buggy travel timing.
+        for outward, inward, edge in ((RIGHT, LEFT, 190), (LEFT, RIGHT, 154)):
+            for fraction in range(0, 256, 16):
+                for delay in (0, 1, 2):
+                    with self.subTest(outward=outward, fraction=fraction, delay=delay):
+                        self.call("init_move")
+                        self.position(180, 152, fraction=fraction)
+                        for _ in range(40):
+                            self.frame(outward)
+                            if self.get("pos_x") == edge:
+                                break
+                        self.assertEqual(self.get("pos_x"), edge)
+                        for _ in range(delay):
+                            self.frame()
+                        for _ in range(40):
+                            self.frame(inward)
+                            x, y = self.get("pos_x"), self.get("pos_y", 1)
+                            # Opaque bounding box must not be inside the ledge.
+                            inside = (160 <= x+1 and x+6 <= 191 and
+                                      160 <= y+2 and y+7 <= 191)
+                            self.assertFalse(inside,
+                                             f"ball entered ledge at X={x}, Y={y}")
+
+    def test_wall_contact_includes_old_edge_exactly_on_boundary(self):
+        self.platform_records((PLATFORM_WALL, 96, 185, 145))
+        for x, buttons, corrected_x in ((139, RIGHT, 138), (144, LEFT, 145)):
+            with self.subTest(x=x, buttons=buttons):
+                self.position(x, 120)
+                self.velocity(0)
+                self.frame(buttons)
+                self.assertEqual(self.get("hit_x"), 1)
+                self.assertEqual(self.get("pos_x"), corrected_x)
+                self.assertEqual(self.get("vel_x"), 0)
+
     def test_player_can_jump_from_lower_floor_onto_ledge(self):
         self.position(146, 184)
         for _ in range(20):

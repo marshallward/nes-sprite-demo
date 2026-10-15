@@ -249,13 +249,15 @@ check_wall:
     cmp pos_x
     bcc @no_right_hit
 
-    ; Check if we are the left of the wall
+    ; Old right edge must be left of or exactly at the wall.
     clc
     lda pos_x
     adc #PLAYER_BODY_R_X
     bcs @no_right_hit
     cmp platform_data+3, y
+    beq :+
     bcs @no_right_hit
+:
 
     ; Check if x(n+1) is to the right of the wall
     clc
@@ -288,14 +290,13 @@ check_wall:
     cmp pos_x
     bcs @no_left_hit
 
-    ; Check if our old left body edge is strictly right of the wall.
+    ; Old left edge must be right of or exactly at the wall.
     clc
     lda pos_x
     adc #PLAYER_BODY_L_X
     bcs @no_left_hit
     cmp platform_data+3, y
     bcc @no_left_hit
-    beq @no_left_hit
 
     ; Check if the left body edge at x(n+1) reaches or passes left of the wall.
     clc
