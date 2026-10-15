@@ -74,8 +74,8 @@ PLAYER_FOOT_BOTTOM_Y = 7
 
 ; Wall-only body bounds relative to player Y.
 ; Wall bounds are separate from floor contact and are unchanged in this patch.
-PLAYER_BODY_L_X = 2
-PLAYER_BODY_R_X = 5
+PLAYER_BODY_L_X = 1
+PLAYER_BODY_R_X = 6
 PLAYER_BODY_TOP_Y = 1
 PLAYER_BODY_BOTTOM_Y = 8
 

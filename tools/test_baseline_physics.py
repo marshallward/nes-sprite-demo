@@ -115,7 +115,7 @@ class BaselinePhysicsTests(unittest.TestCase):
 
     def test_wall_blocks_from_both_sides_and_clears_horizontal_velocity(self):
         self.platform_records((PLATFORM_WALL, 96, 185, 145))
-        for x, buttons in ((139, RIGHT), (144, LEFT)):
+        for x, buttons in ((138, RIGHT), (145, LEFT)):
             with self.subTest(x=x, buttons=buttons):
                 self.position(x, 120)
                 self.frame(buttons)
@@ -130,23 +130,23 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.platform_records((PLATFORM_WALL, 96, 185, 145))
         for y, hit in ((87, 0), (88, 1), (184, 1), (185, 0)):
             with self.subTest(y=y):
-                self.position(139, y)
+                self.position(138, y)
                 self.velocity(0)
                 self.frame(RIGHT)
                 self.assertEqual(self.get("hit_x"), hit)
-                self.assertEqual(self.get("pos_x"), 139 if hit else 140)
+                self.assertEqual(self.get("pos_x"), 138 if hit else 139)
 
     def test_wall_overlap_uses_proposed_vertical_position(self):
         self.platform_records((PLATFORM_WALL, 96, 185, 145))
-        self.position(139, 87, fraction=250)
+        self.position(138, 87, fraction=250)
         self.frame(RIGHT)
         self.assertEqual(self.get("pos_y", 1), 88)
         self.assertEqual(self.get("hit_x"), 1)
-        self.assertEqual(self.get("pos_x"), 139)
+        self.assertEqual(self.get("pos_x"), 138)
 
     def test_moving_away_from_wall_is_not_blocked(self):
         self.platform_records((PLATFORM_WALL, 96, 185, 145))
-        for x, buttons, expected in ((139, LEFT, 138), (144, RIGHT, 145)):
+        for x, buttons, expected in ((138, LEFT, 137), (145, RIGHT, 146)):
             with self.subTest(x=x, buttons=buttons):
                 self.position(x, 120)
                 self.frame(buttons)
@@ -155,7 +155,7 @@ class BaselinePhysicsTests(unittest.TestCase):
 
     def test_wall_hit_clears_on_stationary_update(self):
         self.platform_records((PLATFORM_WALL, 96, 185, 145))
-        self.position(139, 120)
+        self.position(138, 120)
         self.frame(RIGHT)
         self.assertEqual(self.get("hit_x"), 1)
         self.frame()
@@ -164,8 +164,8 @@ class BaselinePhysicsTests(unittest.TestCase):
     def test_nearest_wall_candidate_is_independent_of_record_order(self):
         for walls in ((145, 150), (150, 145)):
             for old_x, proposed_x, velocity, corrected_x in (
-                (130, 155, 1, 139),
-                (160, 130, 255, 149),
+                (130, 155, 1, 138),
+                (160, 130, 255, 150),
             ):
                 with self.subTest(walls=walls, velocity=velocity):
                     self.platform_records(*[(PLATFORM_WALL, 96, 185, x) for x in walls])
@@ -193,24 +193,26 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.assertEqual(self.get("pos_y", 1), 184)
                 self.assertEqual(self.get("hit_y"), 1)
                 self.assertEqual(self.get("hit_x"), 0)
-                self.position(139, 120)
+                self.position(138, 120)
                 self.velocity(0)
                 self.frame(RIGHT)
-                self.assertEqual(self.get("pos_x"), 139)
+                self.assertEqual(self.get("pos_x"), 138)
                 self.assertEqual(self.get("hit_x"), 1)
                 self.assertEqual(self.get("hit_y"), 0)
 
     def test_default_ledge_left_side_blocks_rightward_walk(self):
         for _ in range(40):
             self.frame(RIGHT)
-        self.assertEqual(self.get("pos_x"), 154)
+        self.assertEqual(self.get("pos_x"), 153)
+        self.assertEqual(self.get("pos_x") + 6, 159)  # opaque edge before wall X=160
         self.assertEqual(self.get("hit_x"), 1)
 
     def test_default_ledge_right_side_blocks_leftward_walk(self):
         self.position(210, 160)
         for _ in range(40):
             self.frame(LEFT)
-        self.assertEqual(self.get("pos_x"), 190)
+        self.assertEqual(self.get("pos_x"), 191)
+        self.assertEqual(self.get("pos_x") + 1, 192)  # opaque edge after wall X=191
         self.assertEqual(self.get("hit_x"), 1)
 
     def test_default_ledge_top_lands_above_drawn_surface(self):
