@@ -276,9 +276,60 @@ update_y:
     ;   ... or maybe not, but this seems plausible.
 
 apply_move_collision:
-    ; Gather floor/wall candidates in one pass before applying corrections.
-    ; Mixed-contact ordering/remaining movement is a separate future step.
+    ; Gather floor/wall contacts for the proposed movement.
     jsr apply_platform_collision
+
+    ; NOTE:
+    ; If horizontal velocity is nonzero, then a floor-correcting collision
+    ; could position the player past a joining wall.  This runs an extra
+    ; collision test to account for such a displacement.
+    ;
+    ; Without correction
+    ;
+    ;     ● start
+    ;      \
+    ; ──────\──+     <-- platform
+    ;        \ |
+    ;         \|
+    ;          x     <-- wall collision
+    ;          |\
+    ;          | ●   <-- non-collision endpoint
+    ;
+    ; With second correction
+    ;
+    ;     ● start
+    ;      \
+    ; ──────●──+  continue horizontally
+    ;          |
+    ;          |  wall is below the corrected body
+    ;
+    ; XXX: This should probably be fixed in apply_platform_collision.
+    ; XXX: It took frame counting to even notice this issue.  Ignore?
+
+    ; The following attempts to resolve this issue by replacing next_y with the
+    ; first collision test result and repeating, but I had issues with its
+    ; implementation so I'm leaving it turned off for now.  But we will come
+    ; back to it.
+
+    ;; Confirm a (1) floor hit, (2) horizontal displacement, (3) Y correction.
+    ;lda hit_y
+    ;beq @apply_wall
+    ;lda vel_x
+    ;beq @apply_wall
+    ;lda hit_y_position
+    ;cmp next_y+1
+    ;beq @apply_wall
+
+    ;; Now replace next_y with the contact point and repeat the collision test.
+    ;sta next_y+1
+    ;pha
+    ;jsr apply_platform_collision
+    ;pla
+    ;sta hit_y_position
+    ;lda #1
+    ;sta hit_y
+
+@apply_wall:
     lda hit_x
     beq @check_floor
     lda hit_x_position
@@ -298,8 +349,6 @@ apply_move_collision:
     sta acc_y
     lda buttons
     and #%10000000
-    ; TODO: So which is it?
-    ;bne @skip_ground
     bne @skip_ground
     lda #0
     sta jump_latch

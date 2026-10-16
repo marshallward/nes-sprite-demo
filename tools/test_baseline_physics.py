@@ -223,12 +223,84 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.assertEqual(self.get("pos_y", 1) + 7, 159)
 
     def test_default_ledge_top_can_be_walked_off(self):
-        self.position(180, 152)
-        for _ in range(30):
-            self.frame(RIGHT)
-        self.assertEqual(self.get("pos_x"), 210)
-        self.assertEqual(self.get("hit_x"), 0)
-        self.assertGreater(self.get("pos_y", 1), 152)
+        for direction, expected_x in ((RIGHT, 210), (LEFT, 150)):
+            for fraction in range(0, 256, 16):
+                with self.subTest(direction=direction, fraction=fraction):
+                    self.call("init_move")
+                    self.position(180, 152, fraction=fraction)
+                    for _ in range(30):
+                        self.frame(direction)
+                    self.assertEqual(self.get("pos_x"), expected_x)
+                    self.assertEqual(self.get("hit_x"), 0)
+                    self.assertGreater(self.get("pos_y", 1), 152)
+
+    def test_floor_correction_rejects_false_corner_wall_hit_in_either_order(self):
+        floor = (PLATFORM_FLAT, 160, 191, 160)
+        wall = (PLATFORM_WALL, 161, 200, 191)
+        for records in ((floor, wall), (wall, floor)):
+            with self.subTest(records=records):
+                self.call("init_move")
+                self.platform_records(*records)
+                self.position(184, 152, fraction=240)
+                self.frame(RIGHT)
+                self.assertEqual(self.get("pos_x"), 185)
+                self.assertEqual(self.get("pos_y", 1), 152)
+                self.assertEqual(self.get("pos_y"), 44)
+                self.assertEqual(self.get("hit_x"), 0)
+                self.assertEqual(self.get("hit_y"), 1)
+                self.assertEqual(self.get("vel_x"), 1)
+
+    def test_real_wall_still_blocks_during_floor_correction(self):
+        floor = (PLATFORM_FLAT, 0, 255, 192)
+        wall = (PLATFORM_WALL, 96, 200, 145)
+        for records in ((floor, wall), (wall, floor)):
+            with self.subTest(records=records):
+                self.call("init_move")
+                self.platform_records(*records)
+                self.position(138, 183, fraction=200)
+                self.velocity(256)
+                self.frame(RIGHT)
+                self.assertEqual(self.get("pos_x"), 138)
+                self.assertEqual(self.get("pos_y", 1), 184)
+                self.assertEqual(self.get("hit_x"), 1)
+                self.assertEqual(self.get("hit_y"), 1)
+                self.assertEqual(self.get("vel_x"), 0)
+
+    def test_recheck_finds_farther_wall_after_rejecting_false_near_wall(self):
+        floor = (PLATFORM_FLAT, 0, 255, 160)
+        near = (PLATFORM_WALL, 161, 200, 145)
+        far = (PLATFORM_WALL, 96, 200, 150)
+        for records in ((floor, near, far), (far, near, floor), (near, floor, far)):
+            with self.subTest(records=records):
+                self.call("init_move")
+                self.platform_records(*records)
+                self.position(130, 151)
+                self.put("next_x", 155)
+                self.put("next_y", 155, 1)
+                self.put("next_y", 99)
+                self.put("vel_x", 1)
+                self.call("apply_move_collision")
+                self.assertEqual(self.get("next_x"), 143)
+                self.assertEqual(self.get("hit_x_position"), 143)
+                self.assertEqual(self.get("hit_x"), 1)
+                self.assertEqual(self.get("next_y", 1), 152)
+                self.assertEqual(self.get("next_y"), 99)
+                self.assertEqual(self.get("hit_y"), 1)
+                self.assertEqual(self.get("pos_x"), 130)
+                self.assertEqual(self.get("pos_y", 1), 151)
+
+    def test_floor_correction_can_reveal_wall_missed_by_free_proposal(self):
+        self.platform_records((PLATFORM_FLAT, 0, 255, 160),
+                              (PLATFORM_WALL, 96, 160, 145))
+        self.position(138, 151)
+        self.put("next_x", 139)
+        self.put("next_y", 161, 1)
+        self.put("vel_x", 1)
+        self.call("apply_move_collision")
+        self.assertEqual(self.get("next_x"), 138)
+        self.assertEqual(self.get("next_y", 1), 152)
+        self.assertEqual(self.get("hit_x"), 1)
+        self.assertEqual(self.get("hit_y"), 1)
 
     def test_walk_off_either_corner_and_reverse_cannot_enter_ledge(self):
         # Reverse at each edge across several fractional-Y phases and delays.
