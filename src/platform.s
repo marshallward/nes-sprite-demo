@@ -209,15 +209,6 @@ check_surface:
     ; TODO: These assume rightward slopes!  Leftward would use FOOT_L.
     ; TODO: We also should not be using this point!  See below.
 
-    ; Compute the contact point at next_x
-    clc
-    lda next_x
-    adc #PLAYER_FOOT_R_X    ; A = x(n+1) + x_foot_r
-    jsr surface_y_at_x      ; A = sloped y at x
-    sec
-    sbc #PLAYER_FOOT_BOTTOM_Y   ; Foot-adjusted bottom
-    sta contact_y
-
     ; Compute the contact point at pos_x
     clc
     lda pos_x
@@ -232,10 +223,18 @@ check_surface:
     ; estimate.  We should compute the contact point.
 
     ; Skip if we started below the platform.
-    ; TODO: Complete the old_contact_y test *before* computing contact_y!!
     lda pos_y+1         ; A = y(n)
     cmp old_contact_y   ; C = A >= old_contact_y
     bcs @no_contact
+
+    ; Compute the contact point at next_x
+    clc
+    lda next_x
+    adc #PLAYER_FOOT_R_X    ; A = x(n+1) + x_foot_r
+    jsr surface_y_at_x      ; A = sloped y at x
+    sec
+    sbc #PLAYER_FOOT_BOTTOM_Y   ; Foot-adjusted bottom
+    sta contact_y
 
     ; If y(n+1) < y(n) then we have crossed the platform and need "contact"
     lda next_y+1
