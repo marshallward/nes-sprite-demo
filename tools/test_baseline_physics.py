@@ -13,8 +13,11 @@ from py65.devices.mpu6502 import MPU
 
 ROOT = Path(__file__).resolve().parents[1]
 JUMP, LEFT, RIGHT = 0x80, 0x02, 0x01
-PLATFORM_FLAT = 0
-PLATFORM_WALL = 0xFF
+PLATFORM_FLAT = 0x7F
+PLATFORM_WALL = 0x80
+PLATFORM_WALL_RIGHT = 0x81
+PLATFORM_SLOPE_1_1 = 0
+PLATFORM_SLOPE_2_1 = 1
 
 
 class BaselinePhysicsTests(unittest.TestCase):
@@ -112,6 +115,267 @@ class BaselinePhysicsTests(unittest.TestCase):
         )
 
     # Unit tests
+
+    def test_flat_and_slope_share_surface_height_helper(self):
+        for kind, samples in (
+            (PLATFORM_FLAT, ((20, 191), (32, 191), (48, 191), (90, 191))),
+            (PLATFORM_SLOPE_1_1, ((20, 191), (32, 191), (40, 183),
+                                  (53, 170), (63, 160), (90, 160))),
+            (PLATFORM_SLOPE_2_1, ((20, 191), (32, 191), (40, 175),
+                                  (53, 149), (63, 129), (90, 129))),
+        ):
+            self.platform_records((kind, 32, 63, 191))
+            for x, expected_y in samples:
+                with self.subTest(kind=kind, x=x):
+                    self.cpu.a = x
+                    self.cpu.x = 123
+                    self.cpu.y = 0
+                    self.call("surface_y_at_x")
+                    self.assertEqual(self.cpu.a, expected_y)
+                    self.assertEqual(self.cpu.x, 123)
+                    self.assertEqual(self.cpu.y, 0)
+
+    def test_slope_landing_at_several_horizontal_positions(self):
+        self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
+        for x, resting_y in ((27, 183), (35, 175), (48, 162), (58, 152), (61, 152)):
+            with self.subTest(x=x):
+                self.assertEqual(self.collision(x, resting_y-2, resting_y+3), 1)
+                self.assertEqual(self.get("hit_y_position"), resting_y)
+
+    def test_default_slope_can_be_walked_onto_from_ground(self):
+        self.position(20, 184)
+        for step in range(1, 31):
+            self.frame(RIGHT)
+            x = 20 + step
+            self.assertEqual(self.get("pos_x"), x)
+            right_foot = x + 5
+            surface = 192 if right_foot <= 31 else 192 - (right_foot - 31)
+            self.assertEqual(self.get("pos_y", 1), surface - 8)
+            self.assertEqual(self.get("hit_y"), 1)
+
+    def test_slope_follow_downhill_stays_in_contact_and_joins_ground(self):
+        for fraction in range(0, 256, 16):
+            with self.subTest(fraction=fraction):
+                self.call("init_move")
+                self.position(56, 154, fraction=fraction)
+                for step in range(1, 41):
+                    self.frame(LEFT)
+                    x = 56 - step
+                    right_foot = x + 5
+                    surface = 192 if right_foot <= 31 else 223 - right_foot
+                    self.assertEqual(self.get("pos_x"), x)
+                    self.assertEqual(self.get("pos_y", 1), surface - 8)
+                    self.assertEqual(self.get("hit_y"), 1)
+                    self.assertEqual(self.get("hit_x"), 0)
+                    self.assertEqual(self.get("vel_y"), 0)
+                    self.assertEqual(self.get("vel_y", 1), 0)
+
+    def test_slope_follow_does_not_snap_an_airborne_player_down(self):
+        self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
+        self.position(48, 160)  # two pixels above the standing height
+        self.frame(LEFT)
+        self.assertEqual(self.get("pos_x"), 47)
+        self.assertEqual(self.get("pos_y", 1), 160)
+        self.assertEqual(self.get("hit_y"), 0)
+
+    def test_slope_follow_detaches_when_jumping_downhill(self):
+        self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
+        self.position(48, 162)
+        self.frame(JUMP | LEFT)
+        self.assertEqual(self.get("pos_x"), 47)
+        self.assertLess(self.get("pos_y", 1), 162)
+        self.assertEqual(self.get("hit_y"), 0)
+        self.assertGreaterEqual(self.get("vel_y", 1), 128)
+
+    def test_slope_follow_releases_at_either_span_endpoint(self):
+        self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
+        for x, y, direction, expected_x in ((27, 183, LEFT, 26),
+                                           (61, 152, RIGHT, 62)):
+            with self.subTest(x=x, direction=direction):
+                self.call("init_move")
+                self.position(x, y, fraction=250)
+                self.frame(direction)
+                self.assertEqual(self.get("pos_x"), expected_x)
+                self.assertGreater(self.get("pos_y", 1), y)
+                self.assertEqual(self.get("hit_y"), 0)
+
+    def test_default_slope_right_wall_blocks_ground_approach(self):
+        self.position(80, 184)
+        for _ in range(30):
+            self.frame(LEFT)
+        self.assertEqual(self.get("pos_x"), 63)
+        self.assertEqual(self.get("pos_x") + 1, 64)
+        self.assertEqual(self.get("hit_x"), 1)
+        self.assertEqual(self.get("vel_x"), 0)
+
+    def test_default_slope_right_wall_can_be_passed_above(self):
+        self.position(63, 140)
+        self.frame(LEFT)
+        self.assertEqual(self.get("pos_x"), 62)
+        self.assertEqual(self.get("hit_x"), 0)
+
+    def test_right_facing_wall_blocks_only_leftward_crossing(self):
+        self.platform_records((PLATFORM_WALL_RIGHT, 96, 185, 145))
+        for x, buttons, expected_x, hit in ((138, RIGHT, 139, 0),
+                                           (145, LEFT, 145, 1)):
+            with self.subTest(buttons=buttons):
+                self.call("init_move")
+                self.position(x, 120)
+                self.frame(buttons)
+                self.assertEqual(self.get("pos_x"), expected_x)
+                self.assertEqual(self.get("hit_x"), hit)
+                self.assertEqual(self.get("vel_x"), 0 if hit else 1)
+
+    def test_default_slope_can_be_run_up_and_off_crest(self):
+        for fraction in range(0, 256, 16):
+            with self.subTest(fraction=fraction):
+                self.call("init_move")
+                self.position(20, 184, fraction=fraction)
+                for step in range(1, 71):
+                    self.frame(RIGHT)
+                    self.assertEqual(self.get("pos_x"), 20 + step)
+                    self.assertEqual(self.get("hit_x"), 0)
+                self.assertEqual(self.get("pos_y", 1), 184)
+
+    def test_steep_slope_follows_two_pixels_per_horizontal_step(self):
+        for fraction in (0, 128, 240):
+            with self.subTest(fraction=fraction):
+                self.call("init_move")
+                self.position(84, 184, fraction=fraction)
+                for direction in (RIGHT, LEFT):
+                    for _ in range(25):
+                        old_x = self.get("pos_x")
+                        self.frame(direction)
+                        x = old_x + (1 if direction == RIGHT else -1)
+                        foot = min(111, max(95, x+5))
+                        surface = 192 - 2*(foot-95)
+                        self.assertEqual(self.get("pos_x"), x)
+                        self.assertEqual(self.get("pos_y", 1), surface-8)
+                        self.assertEqual(self.get("hit_y"), 1)
+                        self.assertEqual(self.get("hit_x"), 0)
+
+    def test_steep_slope_landing_span_and_one_way_contact(self):
+        self.platform_records((PLATFORM_SLOPE_2_1, 95, 111, 192))
+        for x, resting_y in ((90, 184), (95, 174), (100, 164),
+                             (106, 152), (109, 152)):
+            with self.subTest(x=x):
+                self.assertEqual(self.collision(x, resting_y-3, resting_y+4), 1)
+                self.assertEqual(self.get("hit_y_position"), resting_y)
+        for x in (89, 110):
+            with self.subTest(outside_x=x):
+                self.assertEqual(self.collision(x, 130, 200), 0)
+        self.assertEqual(self.collision(100, 166, 180), 0)
+        self.assertEqual(self.collision(100, 180, 150), 0)
+
+    def test_steep_slope_jump_detaches_and_lands_again(self):
+        self.platform_records((PLATFORM_SLOPE_2_1, 95, 111, 192))
+        self.position(100, 164)
+        self.frame(JUMP | LEFT)
+        self.assertEqual(self.get("pos_x"), 99)
+        self.assertLess(self.get("pos_y", 1), 164)
+        self.assertEqual(self.get("hit_y"), 0)
+        for _ in range(120):
+            self.frame()
+        self.assertEqual(self.get("pos_y", 1), 166)
+        self.assertEqual(self.get("hit_y"), 1)
+
+    def test_steep_slope_right_wall_blocks_entry_but_allows_exit(self):
+        self.position(124, 184)
+        for _ in range(30):
+            self.frame(LEFT)
+        self.assertEqual(self.get("pos_x"), 111)
+        self.assertEqual(self.get("hit_x"), 1)
+        self.call("init_move")
+        self.position(84, 184)
+        for step in range(1, 51):
+            self.frame(RIGHT)
+            self.assertEqual(self.get("pos_x"), 84+step)
+            self.assertEqual(self.get("hit_x"), 0)
+        self.assertEqual(self.get("pos_y", 1), 184)
+
+    def test_slope_crossing_uses_old_and_proposed_surface_heights(self):
+        self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
+        self.position(47, 163)
+        self.put("next_x", 48)
+        self.put("next_y", 163, 1)
+        self.call("apply_platform_collision")
+        # Surface Y decreases from 171 to 170 as the right foot moves 52 -> 53.
+        self.assertEqual(self.get("hit_y"), 1)
+        self.assertEqual(self.get("hit_y_position"), 162)
+        self.assertEqual(self.get("pos_x"), 47)
+        self.assertEqual(self.get("pos_y", 1), 163)
+        self.assertEqual(self.get("next_x"), 48)
+        self.assertEqual(self.get("next_y", 1), 163)
+
+    def test_slope_span_endpoints_and_one_way_crossing(self):
+        self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
+        for x in (26, 62):
+            with self.subTest(outside_x=x):
+                self.assertEqual(self.collision(x, 140, 200), 0)
+        for old_y, proposed_y in ((163, 170), (170, 155)):
+            with self.subTest(old_y=old_y, proposed_y=proposed_y):
+                self.assertEqual(self.collision(48, old_y, proposed_y), 0)
+
+    def test_slope_stationary_contact_and_jump_detachment(self):
+        self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
+        self.position(48, 162)
+        for _ in range(60):
+            self.frame()
+            self.assertEqual(self.get("pos_y", 1), 162)
+            self.assertEqual(self.get("hit_y"), 1)
+        self.frame(JUMP)
+        self.assertLess(self.get("pos_y", 1), 162)
+        self.assertEqual(self.get("hit_y"), 0)
+        for _ in range(120):
+            self.frame()
+        self.assertEqual(self.get("pos_y", 1), 162)
+        self.assertEqual(self.get("hit_y"), 1)
+
+    def test_flat_and_slope_keep_highest_landing_in_either_order(self):
+        floor = (PLATFORM_FLAT, 0, 255, 192)
+        slope = (PLATFORM_SLOPE_1_1, 32, 63, 191)
+        for records in ((floor, slope), (slope, floor)):
+            with self.subTest(records=records):
+                self.platform_records(*records)
+                self.assertEqual(self.collision(48, 150, 195), 1)
+                self.assertEqual(self.get("hit_y_position"), 162)
+
+    def test_flat_slope_and_wall_share_list(self):
+        self.platform_records((PLATFORM_FLAT, 0, 255, 192),
+                              (PLATFORM_SLOPE_1_1, 32, 63, 191),
+                              (PLATFORM_WALL, 96, 200, 145))
+        self.assertEqual(self.collision(48, 150, 180), 1)
+        self.assertEqual(self.get("hit_y_position"), 162)
+        self.position(138, 120)
+        self.frame(RIGHT)
+        self.assertEqual(self.get("hit_x"), 1)
+        self.assertEqual(self.get("hit_y"), 0)
+        self.assertEqual(self.get("pos_x"), 138)
+
+    def test_drawn_slope_matches_surface_and_original_tiles_are_unchanged(self):
+        rom = (ROOT / "build/jump.nes").read_bytes()
+        chr_data = rom[16+0x4000:16+0x4000+0x2000]
+        self.assertEqual(len(chr_data), 8192)
+        self.assertEqual(chr_data[:96], (ROOT / "assets/ball.bin").read_bytes())
+        map_address = self.symbols["bg0"]
+        for label, expected_kind in (("platform_7", PLATFORM_SLOPE_1_1),
+                                     ("platform_9", PLATFORM_SLOPE_2_1)):
+            record = self.symbols[label]
+            kind, x0, x1, y0 = self.cpu.memory[record:record+4]
+            self.assertEqual(kind, expected_kind)
+            for x in range(x0, x1+1):
+                for y in range(193):
+                    tile = self.cpu.memory[map_address + (y//8)*32 + x//8]
+                    bit = 7 - x%8
+                    lo = (chr_data[tile*16 + y%8] >> bit) & 1
+                    hi = (chr_data[tile*16 + 8 + y%8] >> bit) & 1
+                    if lo | hi:
+                        break
+                self.assertEqual(y, y0 - ((x-x0) << kind), f"drawn slope at X={x}")
+                self.cpu.a = x
+                self.cpu.y = record - self.symbols["platform_data"]
+                self.call("surface_y_at_x")
+                self.assertEqual(self.cpu.a, y)
 
     def test_wall_blocks_from_both_sides_and_clears_horizontal_velocity(self):
         self.platform_records((PLATFORM_WALL, 96, 185, 145))
@@ -348,7 +612,7 @@ class BaselinePhysicsTests(unittest.TestCase):
             self.frame()
         self.assertEqual(self.get("pos_y", 1), 152)
 
-    def test_default_ledge_has_three_segments_over_continuous_ground(self):
+    def test_default_map_has_ledge_and_test_slope(self):
         address = self.symbols["platform_data"]
         count = self.get("platform_count")
         records = [tuple(self.cpu.memory[address+i*4:address+(i+1)*4]) for i in range(count)]
@@ -359,6 +623,10 @@ class BaselinePhysicsTests(unittest.TestCase):
             (PLATFORM_WALL, 161, 200, 160),
             (PLATFORM_FLAT, 160, 191, 160),
             (PLATFORM_WALL, 161, 200, 191),
+            (PLATFORM_SLOPE_1_1, 31, 63, 192),
+            (PLATFORM_WALL_RIGHT, 161, 200, 63),
+            (PLATFORM_SLOPE_2_1, 95, 111, 192),
+            (PLATFORM_WALL_RIGHT, 161, 200, 111),
         ])
 
     def test_background_tiles_draw_ledge_and_preserve_floating_platforms(self):
@@ -369,12 +637,21 @@ class BaselinePhysicsTests(unittest.TestCase):
                 tile = 0
                 if row in (14, 18) and col in (15, 16):
                     tile = 5
-                elif row == 20 and 20 <= col <= 23:
-                    tile = 5
-                elif 21 <= row <= 23 and 20 <= col <= 23:
-                    tile = 2
+                elif 20 <= row <= 23:
+                    diagonal_col = 27 - row
+                    if col == diagonal_col:
+                        tile = 6
+                    elif diagonal_col < col <= 7:
+                        tile = 2
+                    elif col == 13 - (row-20)//2:
+                        tile = 7 if row % 2 == 0 else 8
+                    elif 13 - (row-20)//2 < col <= 13:
+                        tile = 2
+                    elif 20 <= col <= 23:
+                        tile = 5 if row == 20 else 2
                 elif row == 24:
-                    tile = 2 if 20 <= col <= 23 else 5
+                    tile = 2 if (4 <= col <= 7 or 12 <= col <= 13 or
+                                 20 <= col <= 23) else 5
                 elif row >= 25:
                     tile = 2
                 self.assertEqual(self.cpu.memory[address + row*32 + col], tile,

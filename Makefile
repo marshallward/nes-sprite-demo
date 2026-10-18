@@ -33,12 +33,9 @@ $(NES): $(PRG) $(CHR)
 $(PRG): $(OBJECTS) | $(BUILD) $(CONFIG)
 	$(LD) --dbgfile $(BUILD)/jump.dbg -C $(CONFIG) -o $@ $^
 
-# Generate the raw CHR ROM
-# - ball.bin is an 96 B file of 6 tiles.  We append the rest with zeros.
-# - TODO: Would a nice readable text form be good here?
-build/chr.bin:
-	cat assets/ball.bin > $@
-	dd if=/dev/zero bs=8096 count=1 >> $@ 2> /dev/null
+# Preserve the original six tiles, append diagonal ramp tiles, then zero-pad.
+$(CHR): assets/ball.bin tools/gen_chr.py | $(BUILD)
+	python3 tools/gen_chr.py assets/ball.bin $@
 
 # Compile the main program
 $(BUILD)/main.o: $(INC)/ppu.inc $(INC)/apu.inc $(INC)/boot.inc

@@ -31,11 +31,11 @@ bg0:
     .endrepeat
 
     ; The platform!
-    .repeat 15*1
+    .repeat 16*1
         .byte 0
     .endrepeat
     .byte 5, 5
-    .repeat 15*1
+    .repeat 14*1
         .byte 0
     .endrepeat
 
@@ -45,11 +45,11 @@ bg0:
     .endrepeat
 
     ; The platform!
-    .repeat 15*1
+    .repeat 16*1
         .byte 0
     .endrepeat
     .byte 5, 5
-    .repeat 15*1
+    .repeat 14*1
         .byte 0
     .endrepeat
 
@@ -58,32 +58,59 @@ bg0:
         .byte 0
     .endrepeat
 
-    ; Raised ledge top: row 20, columns 20..23 (X=160..191, Y=160).
-    .repeat 20
-        .byte 0
+    ; Rows 20..23: 1:1 ramp in columns 4..7, 2:1 in 12..13, ledge in 20..23.
+    ; Diagonal pixels run (32,191)..(63,160); platform_7 also includes the
+    ; joining ground pixel (31,192), drawn by the ground row below.
+    .repeat 4, row
+        .repeat 32, col
+            .if col < 7-row
+                .byte 0
+            .elseif col = 7-row
+                .byte 6         ; diagonal grass/dirt tile
+            .elseif col <= 7
+                .byte 2         ; dirt below the diagonal
+            .elseif col < 12
+                .byte 0
+            .elseif col <= 13
+                .if col < 13-(row/2)
+                    .byte 0
+                .elseif col = 13-(row/2)
+                    .if (row & 1) = 0
+                        .byte 7 ; upper half of a steep diagonal
+                    .else
+                        .byte 8 ; lower half, with dirt to its right
+                    .endif
+                .else
+                    .byte 2
+                .endif
+            .elseif col < 20
+                .byte 0
+            .elseif col < 24
+                .if row = 0
+                    .byte 5     ; original ledge top
+                .else
+                    .byte 2
+                .endif
+            .else
+                .byte 0
+            .endif
+        .endrepeat
+    .endrepeat
+
+    ; Row 24 (Y=192): lower ground, with dirt under both ramps and the ledge.
+    .repeat 4
+        .byte 5
+    .endrepeat
+    .repeat 4
+        .byte 2
     .endrepeat
     .repeat 4
         .byte 5
     .endrepeat
-    .repeat 8
-        .byte 0
+    .repeat 2
+        .byte 2
     .endrepeat
-
-    ; Ledge body: rows 21..23. The existing solid dirt tile draws the sides.
-    .repeat 3
-        .repeat 20
-            .byte 0
-        .endrepeat
-        .repeat 4
-            .byte 2
-        .endrepeat
-        .repeat 8
-            .byte 0
-        .endrepeat
-    .endrepeat
-
-    ; Lower floors: row 24 (Y=192), with dirt under the raised ledge.
-    .repeat 20
+    .repeat 6
         .byte 5
     .endrepeat
     .repeat 4

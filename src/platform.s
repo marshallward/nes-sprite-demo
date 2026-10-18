@@ -1,6 +1,6 @@
 ; Platform data
 ;
-; One typed list and traversal for flat floors and vertical walls.
+; One list and traversal for flat/sloped floors and vertical walls.
 ; See platform_dev.s for the more general platform-list sketch.
 
 .export init_platforms
@@ -32,32 +32,67 @@ hit_x_position:
     .res 1                  ; corrected player X of the nearest wall candidate
 contact_y:
     .res 1                  ; player Y at which the bottom reaches this floor
+old_contact_y:
+    .res 1                  ; same threshold at the old horizontal position
+surface_offset:
+    .res 1                  ; scratch X displacement for surface height
 
 .segment "RODATA"
 
-PLATFORM_FLAT = 0
-PLATFORM_WALL = $FF
+PLATFORM_FLAT = $7F
+PLATFORM_WALL = $80
+PLATFORM_WALL_RIGHT = $81    ; faces right: blocks leftward approach only
+PLATFORM_SLOPE_1_1 = 0       ; shift 0: vertical rise equals horizontal distance
+PLATFORM_SLOPE_2_1 = 1       ; shift +1: vertical rise is twice horizontal distance
 
 ; Platform records: type, start, end, height.
-; - Flat: (start,end) = (x0, x1), height = y
-; - Wall: (start,end) = (y0, y1), height = x
+; - Flat/slope: (start,end) = (x0, x1), height = map Y at x0.
+;   Slopes rise rightward: surface Y = height - ((X - x0) << shift).
+;   Shifts 0 and +1 are implemented; negative shifts/direction are deferred.
+;   Endpoints are ordered; calculated surface Y must stay in 8..255.
+;   Join convention: adjoining surfaces may share an inclusive endpoint.
+;   Demo slopes include a ground point one pixel left of their diagonal tiles.
+;   This is a geometry choice, not a subpixel requirement; see
+;   doc/platform-physics-plan.md for alternatives and the current limitation.
+; - Wall: (start,end) = (y0, y1), height = x; $80 blocks both directions,
+;   $81 faces right and only blocks a player approaching from the right.
 platform_data:
+
 platform_1:
-    ; Continuous ground, including underneath the raised ledge.
+    ; Continuous ground, including underneath ledges.
     .byte PLATFORM_FLAT, 0, 255, 192
+
+    ; Floating platforms
 platform_2:
-    .byte PLATFORM_FLAT, 120, 135, 144
+    .byte PLATFORM_FLAT, 128, 143, 144
 platform_3:
-    .byte PLATFORM_FLAT, 120, 135, 112
+    .byte PLATFORM_FLAT, 128, 143, 112
+
+    ; Raised ledge
 platform_4:
-    ; Raised ledge: left side, top, right side.
     ; Its map tiles occupy X=160..191, Y=160..191.
     ; Wall bounds are unchanged pending a separate body-alignment review.
     .byte PLATFORM_WALL, 161, 200, 160
 platform_5:
     .byte PLATFORM_FLAT, 160, 191, 160
 platform_6:
-    .byte PLATFORM_WALL, 161, 200, 191
+    .byte PLATFORM_WALL_RIGHT, 161, 200, 191
+
+platform_7:
+    ; Share the ground point (31,192), then follow the four diagonal map tiles
+    ; from (32,191) to (63,160). The player can walk onto the slope from ground.
+    .byte PLATFORM_SLOPE_1_1, 31, 63, 192
+platform_8:
+    ; Ramp's drawn right face; same endpoint convention as the ledge sides.
+    .byte PLATFORM_WALL_RIGHT, 161, 200, 63
+platform_9:
+
+    ; Steeper comparison ramp: 32 pixels of rise over 16 pixels of run.
+    ; Base (95,192) joins ground; diagonal artwork runs (96,190)..(111,160).
+    .byte PLATFORM_SLOPE_2_1, 95, 111, 192
+platform_10:
+    .byte PLATFORM_WALL_RIGHT, 161, 200, 111
+
 platform_data_end:
 
 PLATFORM_STRIDE = platform_2 - platform_1
@@ -98,104 +133,40 @@ apply_platform_collision:
 
     ; X tracks number of platforms
     ; Y tracks position in platform list
-    ;   They are related, but it may not be easy to combine them
     ldy #0
     ldx platform_count
 @platform_loop:
+    ; Exit after completing platform iteration
     cpx #0
     beq @end_platform_loop
 
+    ; TODO: This checks against various wall types.  In the future:
+    ;   - Reduce these checks to a simple masked test
+    ;   - Consolidate walls and platforms -> no check at all!
+
+    ; Check if wall
+    ;   (Use bne to avoid a redundant jump)
     lda platform_data, y
     cmp #PLATFORM_WALL
+    beq @wall
+    cmp #PLATFORM_WALL_RIGHT
     bne :+
+@wall:
     jsr check_wall
     jmp @end_platform_check
 :
-    ; Leave other platform types for later steps.
     cmp #PLATFORM_FLAT
+    beq @surface
+    cmp #PLATFORM_SLOPE_1_1
+    beq @surface
+    cmp #PLATFORM_SLOPE_2_1
     bne @end_platform_check
+@surface:
+    jsr check_surface
 
-    ; Collide if x0 <= x <= x1
-
-    ; Pass through if x < x0
-    clc
-    ; x = proposed x_world + x_foot
-    lda next_x
-    adc #PLAYER_FOOT_R_X
-    cmp platform_data+1, y  ; C = x >= x0(p)
-    bcc @end_platform_check
-
-    ; Pass through if x > x1
-    clc
-    ; x = proposed x_world + x_foot
-    lda next_x
-    adc #PLAYER_FOOT_L_X
-    cmp platform_data+2, y  ; C = x >= x1(p)
-    beq :+                  ; If Z, skip check
-    bcs @end_platform_check
-    ; NOTE: Check if faster to offset + bcs, rather than beq + bcs
-:
-
-    ; Calculate player Y at which the bottom reaches the floor. Equivalent to
-    ; comparing player bottom (player Y + PLAYER_FOOT_BOTTOM_Y) with surface Y,
-    ; but avoids wrapping a body-offset addition near the bottom of the page.
-    sec
-    lda platform_data+3, y
-    sbc #PLAYER_FOOT_BOTTOM_Y
-    sta contact_y
-
-    ; Skip if the old body bottom was already at or below the surface.
-    lda pos_y+1
-    cmp contact_y
-    bcs @end_platform_check
-
-    ; A downward crossing is a floor hit.
-    lda next_y+1
-    cmp contact_y
-    bcs @floor_contact
-
-    ; Standing on the floor also counts as contact, even before gravity moves
-    ; a whole pixel. This lets a released jump rearm on any standing update.
-    ; Do not attach an upward-moving player or one still above this floor.
-    lda vel_y+1
-    bmi @end_platform_check
-    lda contact_y
-    sec
-    sbc #1
-    cmp pos_y+1
-    bne @end_platform_check
-    cmp next_y+1
-    bne @end_platform_check
-
-@floor_contact:
-    sec
-    lda platform_data+3, y
-    ; Correct player Y so the body bottom is one pixel above the map surface.
-    sbc #PLAYER_FOOT_BOTTOM_Y+1
-
-    ; Keep the highest crossed platform so collision does not depend on list
-    ; order. Positive y is downward, so smaller y is closer to the start point.
-    pha
-    lda hit_y               ; Set Z if no recorded collision
-    beq @store_first_hit    ; If set, compare y to cached hit_y_position
-    pla                     ; A = player Y adjusted to stand on this platform
-    cmp hit_y_position      ; C = candidate >= stored corrected Y
-    bcs @end_platform_check ; keep the higher/closer floor already recorded
-    jmp @store_hit          ; record the closer corrected player Y
-
-@store_first_hit:
-    pla
-
-    ; Here, A = player Y adjusted to stand on this platform.
-
-    ; If we're here, then we collide into y (either the first or highest)
-@store_hit:
-    sta hit_y_position
-    lda #1
-    sta hit_y
-
-    ; Set up the next loop iteration
+    ; Set up the next loop iteration.
 @end_platform_check:
+    ; NOTE: 4x iny would be smaller, but platform structure could change.
     tya
     clc
     adc #PLATFORM_STRIDE
@@ -207,12 +178,186 @@ apply_platform_collision:
     rts
 
 
+check_surface:
+    ; Flat and sloped floors share span, crossing, resting-contact and hit tests.
+    ; The existing two-foot width is unchanged; slopes sample the uphill foot
+    ; (right foot for this uphill-right prototype).
+
+    ; TODO: The formal "pass-within" test is in docs/platforms.txt and is
+    ;
+    ;   σA = σ [(q1 − p1 )(a2 − p2 ) − (q2 − p2 )(a1 − p1 )]
+    ;   σB = σ [(q1 − p1 )(b2 − p2 ) − (q2 − p2 )(b1 − p1 )]
+    ;
+    ; but for now we do the simpler x0 <= x <= x1 test
+
+    ; Pass through if x < x0
+    clc
+    lda next_x
+    adc #PLAYER_FOOT_R_X    ; A = x(n+1) + x_foot_r
+    cmp platform_data+1, y  ; C = A >= x0
+    bcc @no_contact
+
+    ; Pass through if x > x1
+    clc
+    lda next_x
+    adc #PLAYER_FOOT_L_X    ; A = x(n+1) + x_foot_l
+    cmp platform_data+2, y  ; C = A >= x1
+    beq :+                  ; If Z, skip check
+    bcs @no_contact
+:
+
+    ; TODO: These assume rightward slopes!  Leftward would use FOOT_L.
+    ; TODO: We also should not be using this point!  See below.
+
+    ; Compute the contact point at next_x
+    clc
+    lda next_x
+    adc #PLAYER_FOOT_R_X    ; A = x(n+1) + x_foot_r
+    jsr surface_y_at_x      ; A = sloped y at x
+    sec
+    sbc #PLAYER_FOOT_BOTTOM_Y   ; Foot-adjusted bottom
+    sta contact_y
+
+    ; Compute the contact point at pos_x
+    clc
+    lda pos_x
+    adc #PLAYER_FOOT_R_X    ; A = x(n) + x_foot_r
+    jsr surface_y_at_x      ; A = sloped y at x
+    sec
+    sbc #PLAYER_FOOT_BOTTOM_Y
+    sta old_contact_y
+
+    ; TODO: This is not quite correct!
+    ; We test y > y0 at pos_x and y < y0 at next_x, which uses different slope
+    ; estimate.  We should compute the contact point.
+
+    ; Skip if we started below the platform.
+    ; TODO: Complete the old_contact_y test *before* computing contact_y!!
+    lda pos_y+1         ; A = y(n)
+    cmp old_contact_y   ; C = A >= old_contact_y
+    bcs @no_contact
+
+    ; If y(n+1) < y(n) then we have crossed the platform and need "contact"
+    lda next_y+1
+    cmp contact_y
+    bcs @floor_contact
+
+    ; This block gives a more robust definition of contact:
+    ; - Velocity is not upward
+    ; - previous position (pos_y) was not on platform (old_contact_y)
+    ;   (where "contact" is one pixel above the platform)
+    ;
+    ; This test prevents the jitter caused by a slope falling faster than
+    ; gravity.  It forces "contact" during any movement.
+    lda vel_y+1
+    bmi @no_contact     ; If vel_y is upward (negative) then no contact
+    lda old_contact_y
+    sec
+    sbc #1
+    cmp pos_y+1
+    bne @no_contact
+
+    ; Contact has been established, use contact_y to adjust next_y
+
+@floor_contact:
+    ; Set position as one point above contact_y
+    ; NOTE: Both are already adjusted for foot-displacement.
+    lda contact_y
+    sec
+    sbc #1
+
+    ; Check if new contact_y is above current highest hit_y_position.
+
+    pha                     ; Store contact_y
+    lda hit_y               ; Check for existing hits (Z unset)
+    beq @store_first_hit    ; For new hits, skip the comparison
+
+    pla                     ; Restore contact_y
+    cmp hit_y_position      ; C = contact_y >= hit_y_position
+    bcs @no_contact         ; If contact_y is below (greater), then skip
+    jmp @store_hit          ; Otherwise, update hit_y_position
+                            ; (and hop around the first-hit stack pop)
+
+@store_first_hit:
+    ; First-hit stack restore of contact_y
+    pla
+
+@store_hit:
+    ; Contact was proven, and the new contact_y is the highest record.
+    ; Store the new contact point as the new hit_y_position.
+    sta hit_y_position
+    lda #1
+    sta hit_y
+
+@no_contact:
+    rts
+
+
+surface_y_at_x:
+    ; Inputs
+    ;   A = position x (typically "foot" shifted)
+    ;   Y = Platform offset (indexed)
+    ; Return:
+    ;   The sloped value of y for a given x
+    ; Notes:
+    ;   X and Y are preserved.  Scratch is shared, not per-platform
+    ; state.
+    sta surface_offset
+    lda platform_data, y
+    cmp #PLATFORM_FLAT
+    bne @slope
+    lda platform_data+3, y
+    rts
+@slope:
+    ; Clamp surface_offset to x0 <= x <= x1 for the purpose of slope testing.
+    ; This handles cases where a foot displacement or pos_x are outside range.
+    ; TODO: IMO this feels like some redundancy in work!  Revisit.
+    lda surface_offset
+    cmp platform_data+1, y  ; C = A >= x0
+    bcs :+
+    lda platform_data+1, y  ; if x < x0, clamp to x0
+:
+    cmp platform_data+2, y  ; C = A >= x1
+    bcc :+
+    lda platform_data+2, y  ; if x >= x1, clamp to x1
+:
+    ; surface_offset = X - x0, where X is the clamped x.
+    sec
+    sbc platform_data+1, y
+    sta surface_offset
+
+    ; Check for a 1:1 slope or a 2:1 slope.
+    ; TODO: This is not general-purpose, each slope needs a dedicated branch.
+    ;   - positive slopes need asl loops, negative slopes need lsr.
+    ;   - Maybe this was overengineered...
+    lda platform_data, y
+    cmp #PLATFORM_SLOPE_2_1
+    bne @height             ; 1:1 : A = X - x0
+    asl surface_offset      ; 2:1 : A = 2*(X - x0)
+@height:
+    ; Now "subtract" y0 (displacing the slope *upward* on the screen)
+    ; (Note that positive is downward!)
+    lda platform_data+3, y
+    sec
+    sbc surface_offset
+    ; A is now the slope-displaced value of X
+    rts
+
+
 check_wall:
     ; Candidate detection only: never alter next_x/next_y or velocity here.
     lda vel_x
     bne :+
     rts
 :
+    ; One-sided right face permits outward/rightward movement from the ramp.
+    lda platform_data, y
+    cmp #PLATFORM_WALL_RIGHT
+    bne @check_overlap
+    lda vel_x
+    bmi @check_overlap
+    rts
+@check_overlap:
     ; Test if the updated y overlaps with the wall bounds (y0, y1)
     ; (Overlap tests for the player body are included, but I am skeptical that
     ; that they are working.)
