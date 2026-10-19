@@ -32,3 +32,9 @@ branch switch. No PPU, NMI, or controller hardware is emulated.
 These are characterization tests: they preserve the current landing,
 platform-edge, jump-timing, and latch behavior, including existing quirks.
 They do not specify improved physics or change the game's assembly.
+
+Four tests are marked ``expectedFailure`` for deferred mixed floor/wall
+resolution (the experimental rescan is disabled). Their assertions remain
+intact; an unexpected success prompts review when that behavior is fixed.
+One overflow-policy test is skipped because the floor overflow guards were
+deliberately removed. Neither category means those issues are resolved.
