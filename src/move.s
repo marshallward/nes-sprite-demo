@@ -270,10 +270,6 @@ update_y:
     sta next_y+1
     rts
 
-    ; TODO: We might be able to avoid the need for next_y!
-    ;   - We could apply the platform x-tests before computing pos_y+1
-    ;   - We could then hold next_y in A for comparison tests.
-    ;   ... or maybe not, but this seems plausible.
 
 apply_move_collision:
     ; Gather floor/wall contacts for the proposed movement.

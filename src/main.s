@@ -1,7 +1,6 @@
 .include "ppu.inc"
 .include "boot.inc"
 
-.importzp buttons
 .import read_joypad1
 .import init_move
 .import update_move

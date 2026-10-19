@@ -1,16 +1,18 @@
 ; Platform data
 ;
 ; One list and traversal for flat/sloped floors and vertical walls.
-; See platform_dev.s for the more general platform-list sketch.
 
+; Subroutines
 .export init_platforms
 .export apply_platform_collision
-.exportzp platform_count
+
+; Platform collision output
 .exportzp hit_y
 .exportzp hit_y_position
 .exportzp hit_x
 .exportzp hit_x_position
 
+; Platfomr collision input
 .importzp pos_x
 .importzp next_x
 .importzp pos_y

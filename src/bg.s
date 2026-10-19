@@ -1,7 +1,6 @@
 .include "ppu.inc"
 
 .export init_bg
-.export render_bg
 
 ; Function arguments
 .importzp arg0
