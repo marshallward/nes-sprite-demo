@@ -5,7 +5,6 @@ BUILD = build
 SRC = src
 INC = inc
 CFG = cfg
-GENHEADER = tools/genheader.sh
 
 CONFIG = $(CFG)/nrom128.cfg
 PRG = $(BUILD)/prg.bin
