@@ -23,42 +23,50 @@
 .segment "ZEROPAGE"
 
 platform_count:
+    ; Number of platforms
     .res 1
+
 hit_y:
+    ; 1 if y-motion triggers a collision
     .res 1
 hit_y_position:
+    ; Collision-adjusted y position
     .res 1
+
 hit_x:
+    ; 1 if x-motion triggers a collision
     .res 1
 hit_x_position:
-    .res 1                  ; corrected player X of the nearest wall candidate
-contact_y:
-    .res 1                  ; player Y at which the bottom reaches this floor
+    ; Collision-adjusted x position
+    .res 1
+
 old_contact_y:
-    .res 1                  ; same threshold at the old horizontal position
+    ; Sloped platform position at pos_x
+    .res 1
+
+contact_y:
+    ; Sloped platform position at next_x
+    .res 1
+
 surface_offset:
-    .res 1                  ; scratch X displacement for surface height
+    ; scratch X displacement, used in several calculations
+    .res 1
 
 .segment "RODATA"
 
+; Platform types
+; TODO: Create a mask-friendly format
 PLATFORM_FLAT = $7F
 PLATFORM_WALL = $80
-PLATFORM_WALL_RIGHT = $81    ; faces right: blocks leftward approach only
-PLATFORM_SLOPE_1_1 = 0       ; shift 0: vertical rise equals horizontal distance
-PLATFORM_SLOPE_2_1 = 1       ; shift +1: vertical rise is twice horizontal distance
+PLATFORM_WALL_RIGHT = $81
+PLATFORM_SLOPE_1_1 = 0
+PLATFORM_SLOPE_2_1 = 1
 
-; Platform records: type, start, end, height.
-; - Flat/slope: (start,end) = (x0, x1), height = map Y at x0.
-;   Slopes rise rightward: surface Y = height - ((X - x0) << shift).
-;   Shifts 0 and +1 are implemented; negative shifts/direction are deferred.
-;   Endpoints are ordered; calculated surface Y must stay in 8..255.
-;   Join convention: adjoining surfaces may share an inclusive endpoint.
-;   Demo slopes include a ground point one pixel left of their diagonal tiles.
-;   This is a geometry choice, not a subpixel requirement; see
-;   doc/platform-physics-plan.md for alternatives and the current limitation.
-; - Wall: (start,end) = (y0, y1), height = x; $80 blocks both directions,
-;   $81 faces right and only blocks a player approaching from the right.
 platform_data:
+    ; Platform format: type, start, end, position
+    ;
+    ; - Flat/sloped: slope, x0, x1, y0
+    ; - walls: type, y0, y1, x0
 
 platform_1:
     ; Continuous ground, including underneath ledges.
@@ -81,16 +89,11 @@ platform_6:
     .byte PLATFORM_WALL_RIGHT, 161, 200, 191
 
 platform_7:
-    ; Share the ground point (31,192), then follow the four diagonal map tiles
-    ; from (32,191) to (63,160). The player can walk onto the slope from ground.
     .byte PLATFORM_SLOPE_1_1, 31, 63, 192
 platform_8:
-    ; Ramp's drawn right face; same endpoint convention as the ledge sides.
     .byte PLATFORM_WALL_RIGHT, 161, 200, 63
-platform_9:
 
-    ; Steeper comparison ramp: 32 pixels of rise over 16 pixels of run.
-    ; Base (95,192) joins ground; diagonal artwork runs (96,190)..(111,160).
+platform_9:
     .byte PLATFORM_SLOPE_2_1, 95, 111, 192
 platform_10:
     .byte PLATFORM_WALL_RIGHT, 161, 200, 111
@@ -181,16 +184,24 @@ apply_platform_collision:
 
 
 check_surface:
-    ; Flat and sloped floors share span, crossing, resting-contact and hit tests.
-    ; The existing two-foot width is unchanged; slopes sample the uphill foot
-    ; (right foot for this uphill-right prototype).
-
-    ; TODO: The formal "pass-within" test is in docs/platforms.txt and is
+    ; Line-based collision has two criteria:
+    ; * Line-crossing: Does P-Q cross the line drawn by A-B?
+    ; * Segment-range: Does the crossing pass within the segment A-B?
     ;
-    ;   σA = σ [(q1 − p1 )(a2 − p2 ) − (q2 − p2 )(a1 − p1 )]
-    ;   σB = σ [(q1 − p1 )(b2 − p2 ) − (q2 − p2 )(b1 − p1 )]
+    ; First do the segment-range test.
+    ; TODO: This is the weaker x-only test: x0 <= x <= x1
     ;
-    ; but for now we do the simpler x0 <= x <= x1 test
+    ; It does not consider displacments beyond this range.  The following
+    ; passes through:
+    ;
+    ;  ● P
+    ;   ╲
+    ;    ╲
+    ;   A─×───B
+    ;      ╲
+    ;       ● Q
+    ;
+    ; But this requires significantly more arithmetic, so we defer it for now.
 
     ; Pass through if x < x0
     clc
@@ -220,9 +231,22 @@ check_surface:
     sbc #PLAYER_FOOT_BOTTOM_Y
     sta old_contact_y
 
-    ; TODO: This is not quite correct!
-    ; We test y > y0 at pos_x and y < y0 at next_x, which uses different slope
-    ; estimate.  We should compute the contact point.
+    ; Line-crossing test
+    ; We use the "two-height" method.
+    ;
+    ;    ● P
+    ;    │╲
+    ;    │ ╲
+    ;  A─┼──×──┼─B
+    ;        ╲ │
+    ;         ╲│
+    ;          ● Q
+    ;
+    ; - Find the "contact_y" for P.x and Q.x along A-B
+    ; - Compute the height displacements
+    ; - If P is "above" AB, then collision is possible
+    ; - If Q is "below" AB, then a collision occurs
+    ;   (Assuming the segment test has passed)
 
     ; Skip if we started below the platform.
     lda pos_y+1         ; A = y(n)
