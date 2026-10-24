@@ -188,7 +188,7 @@ check_surface:
     ; * Line-crossing: Does P-Q cross the line drawn by A-B?
     ; * Segment-range: Does the crossing pass within the segment A-B?
     ;
-    ; First do the segment-range test.
+    ; ==> Segment Range test
     ; TODO: This is the weaker x-only test: x0 <= x <= x1
     ;
     ; It does not consider displacments beyond this range.  The following
@@ -219,25 +219,14 @@ check_surface:
     bcs @no_contact
 :
 
-    ; TODO: These assume rightward slopes!  Leftward would use FOOT_L.
-    ; TODO: We also should not be using this point!  See below.
-
-    ; Compute the contact point at pos_x
-    clc
-    lda pos_x
-    adc #PLAYER_FOOT_R_X    ; A = x(n) + x_foot_r
-    jsr surface_y_at_x      ; A = sloped y at x
-    sec
-    sbc #PLAYER_FOOT_BOTTOM_Y
-    sta old_contact_y
-
-    ; Line-crossing test
+    ; ==> Line-crossing test
+    ;
     ; We use the "two-height" method.
     ;
     ;    ● P
     ;    │╲
     ;    │ ╲
-    ;  A─┼──×──┼─B
+    ;  A─┴──×──┬─B
     ;        ╲ │
     ;         ╲│
     ;          ● Q
@@ -247,6 +236,17 @@ check_surface:
     ; - If P is "above" AB, then collision is possible
     ; - If Q is "below" AB, then a collision occurs
     ;   (Assuming the segment test has passed)
+
+    ; TODO: These assume rightward slopes!  Leftward would use FOOT_L.
+
+    ; Compute the contact point at pos_x
+    clc
+    lda pos_x
+    adc #PLAYER_FOOT_R_X    ; A = x(n) + x_foot_r
+    jsr surface_y_at_x      ; A = sloped y at x
+    sec
+    sbc #PLAYER_FOOT_BOTTOM_Y
+    sta old_contact_y
 
     ; Skip if we started below the platform.
     lda pos_y+1         ; A = y(n)
