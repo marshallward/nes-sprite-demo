@@ -1,4 +1,5 @@
 .include "ppu.inc"
+.include "spikes.inc"
 
 .export init_bg
 
@@ -91,7 +92,11 @@ bg0:
                     .byte 2
                 .endif
             .else
-                .byte 0
+                .if row = 3 && col >= SPIKES_X0/8 && col <= SPIKES_X1/8
+                    .byte SPIKES_TILE
+                .else
+                    .byte 0
+                .endif
             .endif
         .endrepeat
     .endrepeat

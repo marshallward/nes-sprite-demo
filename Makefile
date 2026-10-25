@@ -13,7 +13,7 @@ NES = $(BUILD)/jump.nes
 
 # TODO: Automate?
 OBJECTS = $(BUILD)/main.o $(BUILD)/pad.o $(BUILD)/bg.o $(BUILD)/move.o \
-	$(BUILD)/platform.o $(BUILD)/header.o
+	$(BUILD)/platform.o $(BUILD)/hazard.o $(BUILD)/game.o $(BUILD)/header.o
 
 
 # Build rules
@@ -39,6 +39,8 @@ $(CHR): assets/ball.bin tools/gen_chr.py | $(BUILD)
 # Compile the main program
 $(BUILD)/main.o: $(INC)/ppu.inc $(INC)/apu.inc $(INC)/boot.inc
 $(BUILD)/bg.o: $(INC)/ppu.inc
+$(BUILD)/platform.o $(BUILD)/hazard.o: $(INC)/body.inc
+$(BUILD)/bg.o $(BUILD)/hazard.o: $(INC)/spikes.inc
 
 $(BUILD)/%.o: $(SRC)/%.s | $(BUILD)
 	$(AS) -g -t none -I inc -o $@ $<

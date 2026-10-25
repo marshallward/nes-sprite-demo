@@ -1,6 +1,7 @@
 ; Platform data
 ;
 ; One list and traversal for flat/sloped floors and vertical walls.
+.include "body.inc"
 
 ; Subroutines
 .export init_platforms
@@ -112,12 +113,7 @@ PLAYER_FOOT_R_X = 5
 ; at OAM Y+1; the ball's lowest opaque row is tile row 6, hence OAM Y+7.
 PLAYER_FOOT_BOTTOM_Y = 7
 
-; Wall-only body bounds relative to player Y.
-; Wall bounds are separate from floor contact and are unchanged in this patch.
-PLAYER_BODY_L_X = 1
-PLAYER_BODY_R_X = 6
-PLAYER_BODY_TOP_Y = 1
-PLAYER_BODY_BOTTOM_Y = 8
+; Wall/hazard body bounds are shared in body.inc; floor foot geometry is unchanged.
 
 .setcpu "6502"
 .segment "CODE"

@@ -14,7 +14,16 @@ To build the ROM:
 
     make
 
-The default path of the ROM is ``build/sprite.nes``.
+The default path of the ROM is ``build/jump.nes``.
+
+Spike demo
+----------
+
+There is a two-tile spike patch on the ground to the right of the raised ledge
+(world X=208..223). Touching its rectangular danger area is lethal. The player
+disappears for 45 updates, then respawns at the original safe starting position.
+Jump before reaching the tips to clear them. No health, lives, or knockback yet.
+Reset after rebuilding instead of loading an old save state.
 
 Baseline physics tests
 ----------------------
@@ -38,3 +47,7 @@ resolution (the experimental rescan is disabled). Their assertions remain
 intact; an unexpected success prompts review when that behavior is fixed.
 One overflow-policy test is skipped because the floor overflow guards were
 deliberately removed. Neither category means those issues are resolved.
+
+Hazard/death/respawn tests use the same built ROM and CPU harness::
+
+    python3 tools/test_gameplay.py

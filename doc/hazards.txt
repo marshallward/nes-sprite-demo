@@ -1,0 +1,43 @@
+First gameplay slice: spikes
+============================
+
+This is a small touch-trigger list, not a new solid-block or general region
+engine. Platforms still support/block movement. A hazard rectangle triggers
+death without correcting the player's position.
+
+Files and update order
+----------------------
+
+* inc/spikes.inc: demo rectangle in actual map pixels, X=208..223, Y=184..191.
+  src/bg.s draws tile 9 twice just above existing ground at Y=192.
+* src/hazard.s: one immutable list of inclusive (x0,x1,y0,y1) bounds.
+  check_hazards tests the committed player body; carry set means touching.
+  It allocates no runtime scratch or count RAM. This is an endpoint-overlap
+  test, not swept collision; higher speeds may eventually need swept triggers.
+* inc/body.inc: unchanged body offsets (X=1..6, player Y=1..8), shared with
+  wall checks. Floor feet remain narrower. Transparent spike corners are still
+  dangerous: the trigger intentionally uses a rectangle, not a pixel mask.
+* src/game.s: update_game calls update_move, then check_hazards. On a hit it
+  starts death_timer=45 and clears movement through init_move. While the timer
+  is nonzero, movement/camera updates are skipped. At zero, reset movement,
+  fractional Y, position (124,160), camera X and nametable. Input is not buffered.
+* main.s: calls update_game instead of update_move; writes sprite Y=$F0 while
+  death_timer is nonzero, otherwise writes the player's Y normally. This is a
+  hide/pause/respawn sequence, not an animation or health system.
+
+Memory
+------
+
+Only death_timer needs new persistent storage: one ordinary-RAM byte at $0300.
+No new zero-page bytes. The linker RAM region now begins at $0300 because
+$0200..$02ff is already used directly by main.s as the sprite DMA buffer.
+
+Tests
+-----
+
+Build first, then run python tools/test_gameplay.py (py65 required). Nine tests
+cover inclusive contact boundaries, safe spawn, walking/falling into spikes,
+death freeze and exact timer/respawn, jumping over the patch, post-floor-correction
+detection, main-loop sprite hiding/restoration, and tile/map geometry. They do
+not emulate the PPU. A separate temporary headless Mesen script verified visible
+spikes, death hiding, respawn/camera reset and a successful jump over the patch.

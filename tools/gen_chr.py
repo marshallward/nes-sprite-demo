@@ -18,6 +18,30 @@ def ramp_tile(rise=1, base=7):
     return data
 
 
+def spike_tile():
+    # One crude triangle per tile: bright face (3), darker right edge (2).
+    # Keep the same outline, but avoid grass green so spikes read as hazards.
+    pixels = (
+        "...33...",
+        "...32...",
+        "..3332..",
+        "..3322..",
+        ".333322.",
+        ".333222.",
+        "33333222",
+        "33332222",
+    )
+    data = bytearray()
+    for plane in range(2):
+        for y in range(8):
+            row = 0
+            for x in range(8):
+                color = 0 if pixels[y][x] == "." else int(pixels[y][x])
+                row |= ((color >> plane) & 1) << (7-x)
+            data.append(row)
+    return data
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         raise SystemExit("usage: gen_chr.py INPUT_TILES OUTPUT_CHR")
@@ -25,5 +49,6 @@ if __name__ == "__main__":
     if len(original) != 6 * 16:
         raise SystemExit("Expected six original tiles; the ramp must be tile 6")
     # Tile 6: 1:1. Tiles 7/8: upper/lower halves of a 2:1 diagonal.
-    data = original + ramp_tile() + ramp_tile(2, 14) + ramp_tile(2, 6)
+    # Tile 9: spikes. Existing tile indices/artwork stay unchanged.
+    data = original + ramp_tile() + ramp_tile(2, 14) + ramp_tile(2, 6) + spike_tile()
     Path(sys.argv[2]).write_bytes(data + bytes(8192 - len(data)))

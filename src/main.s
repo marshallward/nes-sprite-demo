@@ -2,8 +2,9 @@
 .include "boot.inc"
 
 .import read_joypad1
-.import init_move
-.import update_move
+.import init_game
+.import update_game
+.import death_timer
 .import init_platforms
 .import init_bg
 
@@ -121,8 +122,8 @@ reset:
     lda #0
     sta frame
 
-    ; Initialize movement state
-    jsr init_move
+    ; Initialize gameplay and movement state at the safe spawn.
+    jsr init_game
 
     ; Initialize active platform data
     jsr init_platforms
@@ -144,11 +145,17 @@ main:
     ; Read controller
     jsr read_joypad1
 
-    ; Update position
-    jsr update_move
+    ; Update movement, hazard touching, and death/respawn.
+    jsr update_game
 
     ; Transfer positions to OAM buffer
+    lda death_timer
+    beq @visible
+    lda #$F0                ; hide the player below the visible screen while dead
+    bne @store_y
+@visible:
     lda pos_y+1
+@store_y:
     sta $0200
     sec
     lda pos_x

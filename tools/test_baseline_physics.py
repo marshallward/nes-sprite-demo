@@ -661,6 +661,8 @@ class BaselinePhysicsTests(unittest.TestCase):
                         tile = 2
                     elif 20 <= col <= 23:
                         tile = 5 if row == 20 else 2
+                    elif row == 23 and col in (26, 27):
+                        tile = 9  # spike patch at X208..223, Y184..191
                 elif row == 24:
                     tile = 2 if (4 <= col <= 7 or 12 <= col <= 13 or
                                  20 <= col <= 23) else 5
