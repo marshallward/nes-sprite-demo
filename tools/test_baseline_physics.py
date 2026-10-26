@@ -5,6 +5,8 @@ Build the current ROM first, install py65, then run this file. Tests execute
 the assembled 6502 routines without emulating the PPU, NMI, or joypad.
 Expected failures retain desired behavior for deferred collision-resolution work;
 an unexpected success is a test failure so those markers get reviewed after fixes.
+Historical movement fixtures use 1px/update ROM data; test_subpixel_x.py instead
+uses the shipped 0.75px default. get/put still access individual bytes directly.
 """
 from pathlib import Path
 import re
@@ -23,6 +25,10 @@ PLATFORM_SLOPE_2_1 = 1
 
 
 class BaselinePhysicsTests(unittest.TestCase):
+    # Retain the historical 1px behavior fixtures; default-speed tests explicitly
+    # set this to None. Only ROM speed data is changed, never instructions.
+    walk_speed_override = 256
+
     def setUp(self):
         self.symbols = {}
 
@@ -48,7 +54,13 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.call("init_move")
         self.call("init_platforms")
         self.platform_capacity = self.get("platform_count")
+        if self.walk_speed_override is not None:
+            self.set_walk_speed(self.walk_speed_override)
         self.position(124, 160)
+
+    def set_walk_speed(self, fixed):
+        self.put("walk_speed", fixed)
+        self.put("walk_speed", fixed >> 8, 1)
 
     # Support functions
 
@@ -60,9 +72,10 @@ class BaselinePhysicsTests(unittest.TestCase):
         """Write lower byte of value at the symbol address plus offset."""
         self.cpu.memory[self.symbols[name] + offset] = value & 255
 
-    def position(self, x, y, fraction=0):
+    def position(self, x, y, fraction=0, x_fraction=0):
         """Set player position, including the fractional byte of Y."""
-        self.put("pos_x", x)
+        self.put("pos_x", x_fraction)
+        self.put("pos_x", x, 1)
         self.put("pos_y", fraction)
         self.put("pos_y", y, 1)
 
@@ -102,7 +115,7 @@ class BaselinePhysicsTests(unittest.TestCase):
 
     def collision(self, x, old_y, next_y):
         self.position(x, old_y)
-        self.put("next_x", x)
+        self.put("next_x", x, 1)
         self.put("next_y", next_y, 1)
         self.call("apply_platform_collision")
         return self.get("hit_y")
@@ -149,7 +162,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         for step in range(1, 31):
             self.frame(RIGHT)
             x = 20 + step
-            self.assertEqual(self.get("pos_x"), x)
+            self.assertEqual(self.get("pos_x", 1), x)
             right_foot = x + 5
             surface = 192 if right_foot <= 31 else 192 - (right_foot - 31)
             self.assertEqual(self.get("pos_y", 1), surface - 8)
@@ -165,7 +178,7 @@ class BaselinePhysicsTests(unittest.TestCase):
                     x = 56 - step
                     right_foot = x + 5
                     surface = 192 if right_foot <= 31 else 223 - right_foot
-                    self.assertEqual(self.get("pos_x"), x)
+                    self.assertEqual(self.get("pos_x", 1), x)
                     self.assertEqual(self.get("pos_y", 1), surface - 8)
                     self.assertEqual(self.get("hit_y"), 1)
                     self.assertEqual(self.get("hit_x"), 0)
@@ -176,7 +189,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
         self.position(48, 160)  # two pixels above the standing height
         self.frame(LEFT)
-        self.assertEqual(self.get("pos_x"), 47)
+        self.assertEqual(self.get("pos_x", 1), 47)
         self.assertEqual(self.get("pos_y", 1), 160)
         self.assertEqual(self.get("hit_y"), 0)
 
@@ -184,7 +197,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
         self.position(48, 162)
         self.frame(JUMP | LEFT)
-        self.assertEqual(self.get("pos_x"), 47)
+        self.assertEqual(self.get("pos_x", 1), 47)
         self.assertLess(self.get("pos_y", 1), 162)
         self.assertEqual(self.get("hit_y"), 0)
         self.assertGreaterEqual(self.get("vel_y", 1), 128)
@@ -197,7 +210,7 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.call("init_move")
                 self.position(x, y, fraction=250)
                 self.frame(direction)
-                self.assertEqual(self.get("pos_x"), expected_x)
+                self.assertEqual(self.get("pos_x", 1), expected_x)
                 self.assertGreater(self.get("pos_y", 1), y)
                 self.assertEqual(self.get("hit_y"), 0)
 
@@ -205,15 +218,15 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.position(80, 184)
         for _ in range(30):
             self.frame(LEFT)
-        self.assertEqual(self.get("pos_x"), 63)
-        self.assertEqual(self.get("pos_x") + 1, 64)
+        self.assertEqual(self.get("pos_x", 1), 63)
+        self.assertEqual(self.get("pos_x", 1) + 1, 64)
         self.assertEqual(self.get("hit_x"), 1)
-        self.assertEqual(self.get("vel_x"), 0)
+        self.assertEqual(self.get("vel_x", 1), 0)
 
     def test_default_slope_right_wall_can_be_passed_above(self):
         self.position(63, 140)
         self.frame(LEFT)
-        self.assertEqual(self.get("pos_x"), 62)
+        self.assertEqual(self.get("pos_x", 1), 62)
         self.assertEqual(self.get("hit_x"), 0)
 
     def test_right_facing_wall_blocks_only_leftward_crossing(self):
@@ -224,9 +237,9 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.call("init_move")
                 self.position(x, 120)
                 self.frame(buttons)
-                self.assertEqual(self.get("pos_x"), expected_x)
+                self.assertEqual(self.get("pos_x", 1), expected_x)
                 self.assertEqual(self.get("hit_x"), hit)
-                self.assertEqual(self.get("vel_x"), 0 if hit else 1)
+                self.assertEqual(self.get("vel_x", 1), 0 if hit else 1)
 
     def test_default_slope_can_be_run_up_and_off_crest(self):
         for fraction in range(0, 256, 16):
@@ -235,7 +248,7 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.position(20, 184, fraction=fraction)
                 for step in range(1, 71):
                     self.frame(RIGHT)
-                    self.assertEqual(self.get("pos_x"), 20 + step)
+                    self.assertEqual(self.get("pos_x", 1), 20 + step)
                     self.assertEqual(self.get("hit_x"), 0)
                 self.assertEqual(self.get("pos_y", 1), 184)
 
@@ -246,12 +259,12 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.position(84, 184, fraction=fraction)
                 for direction in (RIGHT, LEFT):
                     for _ in range(25):
-                        old_x = self.get("pos_x")
+                        old_x = self.get("pos_x", 1)
                         self.frame(direction)
                         x = old_x + (1 if direction == RIGHT else -1)
                         foot = min(111, max(95, x+5))
                         surface = 192 - 2*(foot-95)
-                        self.assertEqual(self.get("pos_x"), x)
+                        self.assertEqual(self.get("pos_x", 1), x)
                         self.assertEqual(self.get("pos_y", 1), surface-8)
                         self.assertEqual(self.get("hit_y"), 1)
                         self.assertEqual(self.get("hit_x"), 0)
@@ -273,7 +286,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.platform_records((PLATFORM_SLOPE_2_1, 95, 111, 192))
         self.position(100, 164)
         self.frame(JUMP | LEFT)
-        self.assertEqual(self.get("pos_x"), 99)
+        self.assertEqual(self.get("pos_x", 1), 99)
         self.assertLess(self.get("pos_y", 1), 164)
         self.assertEqual(self.get("hit_y"), 0)
         for _ in range(120):
@@ -285,28 +298,28 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.position(124, 184)
         for _ in range(30):
             self.frame(LEFT)
-        self.assertEqual(self.get("pos_x"), 111)
+        self.assertEqual(self.get("pos_x", 1), 111)
         self.assertEqual(self.get("hit_x"), 1)
         self.call("init_move")
         self.position(84, 184)
         for step in range(1, 51):
             self.frame(RIGHT)
-            self.assertEqual(self.get("pos_x"), 84+step)
+            self.assertEqual(self.get("pos_x", 1), 84+step)
             self.assertEqual(self.get("hit_x"), 0)
         self.assertEqual(self.get("pos_y", 1), 184)
 
     def test_slope_crossing_uses_old_and_proposed_surface_heights(self):
         self.platform_records((PLATFORM_SLOPE_1_1, 32, 63, 191))
         self.position(47, 163)
-        self.put("next_x", 48)
+        self.put("next_x", 48, 1)
         self.put("next_y", 163, 1)
         self.call("apply_platform_collision")
         # Surface Y decreases from 171 to 170 as the right foot moves 52 -> 53.
         self.assertEqual(self.get("hit_y"), 1)
         self.assertEqual(self.get("hit_y_position"), 162)
-        self.assertEqual(self.get("pos_x"), 47)
+        self.assertEqual(self.get("pos_x", 1), 47)
         self.assertEqual(self.get("pos_y", 1), 163)
-        self.assertEqual(self.get("next_x"), 48)
+        self.assertEqual(self.get("next_x", 1), 48)
         self.assertEqual(self.get("next_y", 1), 163)
 
     def test_slope_span_endpoints_and_one_way_crossing(self):
@@ -352,7 +365,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.frame(RIGHT)
         self.assertEqual(self.get("hit_x"), 1)
         self.assertEqual(self.get("hit_y"), 0)
-        self.assertEqual(self.get("pos_x"), 138)
+        self.assertEqual(self.get("pos_x", 1), 138)
 
     def test_drawn_slope_matches_surface_and_original_tiles_are_unchanged(self):
         rom = (ROOT / "build/jump.nes").read_bytes()
@@ -385,11 +398,11 @@ class BaselinePhysicsTests(unittest.TestCase):
             with self.subTest(x=x, buttons=buttons):
                 self.position(x, 120)
                 self.frame(buttons)
-                self.assertEqual(self.get("pos_x"), x)
-                self.assertEqual(self.get("next_x"), x)
+                self.assertEqual(self.get("pos_x", 1), x)
+                self.assertEqual(self.get("next_x", 1), x)
                 self.assertEqual(self.get("hit_x_position"), x)
                 self.assertEqual(self.get("hit_x"), 1)
-                self.assertEqual(self.get("vel_x"), 0)
+                self.assertEqual(self.get("vel_x", 1), 0)
                 self.assertEqual(self.get("hit_y"), 0)
 
     def test_wall_vertical_overlap_includes_endpoints(self):
@@ -400,7 +413,7 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.velocity(0)
                 self.frame(RIGHT)
                 self.assertEqual(self.get("hit_x"), hit)
-                self.assertEqual(self.get("pos_x"), 138 if hit else 139)
+                self.assertEqual(self.get("pos_x", 1), 138 if hit else 139)
 
     def test_wall_overlap_uses_proposed_vertical_position(self):
         self.platform_records((PLATFORM_WALL, 96, 185, 145))
@@ -408,7 +421,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.frame(RIGHT)
         self.assertEqual(self.get("pos_y", 1), 88)
         self.assertEqual(self.get("hit_x"), 1)
-        self.assertEqual(self.get("pos_x"), 138)
+        self.assertEqual(self.get("pos_x", 1), 138)
 
     def test_moving_away_from_wall_is_not_blocked(self):
         self.platform_records((PLATFORM_WALL, 96, 185, 145))
@@ -417,7 +430,7 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.position(x, 120)
                 self.frame(buttons)
                 self.assertEqual(self.get("hit_x"), 0)
-                self.assertEqual(self.get("pos_x"), expected)
+                self.assertEqual(self.get("pos_x", 1), expected)
 
     def test_wall_hit_clears_on_stationary_update(self):
         self.platform_records((PLATFORM_WALL, 96, 185, 145))
@@ -436,16 +449,16 @@ class BaselinePhysicsTests(unittest.TestCase):
                 with self.subTest(walls=walls, velocity=velocity):
                     self.platform_records(*[(PLATFORM_WALL, 96, 185, x) for x in walls])
                     self.position(old_x, 120)
-                    self.put("next_x", proposed_x)
+                    self.put("next_x", proposed_x, 1)
                     self.put("next_y", 120, 1)
-                    self.put("vel_x", velocity)
+                    self.put("vel_x", velocity, 1)
                     self.call("apply_platform_collision")
                     self.assertEqual(self.get("hit_x"), 1)
                     self.assertEqual(self.get("hit_x_position"), corrected_x)
                     # Gathering candidates must not mutate the movement proposal.
-                    self.assertEqual(self.get("next_x"), proposed_x)
-                    self.assertEqual(self.get("pos_x"), old_x)
-                    self.assertEqual(self.get("vel_x"), velocity)
+                    self.assertEqual(self.get("next_x", 1), proposed_x)
+                    self.assertEqual(self.get("pos_x", 1), old_x)
+                    self.assertEqual(self.get("vel_x", 1), velocity)
 
     def test_floor_and_wall_records_share_one_list_in_either_order(self):
         floor = (PLATFORM_FLAT, 0, 255, 192)
@@ -462,23 +475,23 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.position(138, 120)
                 self.velocity(0)
                 self.frame(RIGHT)
-                self.assertEqual(self.get("pos_x"), 138)
+                self.assertEqual(self.get("pos_x", 1), 138)
                 self.assertEqual(self.get("hit_x"), 1)
                 self.assertEqual(self.get("hit_y"), 0)
 
     def test_default_ledge_left_side_blocks_rightward_walk(self):
         for _ in range(40):
             self.frame(RIGHT)
-        self.assertEqual(self.get("pos_x"), 153)
-        self.assertEqual(self.get("pos_x") + 6, 159)  # opaque edge before wall X=160
+        self.assertEqual(self.get("pos_x", 1), 153)
+        self.assertEqual(self.get("pos_x", 1) + 6, 159)  # opaque edge before wall X=160
         self.assertEqual(self.get("hit_x"), 1)
 
     def test_default_ledge_right_side_blocks_leftward_walk(self):
         self.position(210, 160)
         for _ in range(40):
             self.frame(LEFT)
-        self.assertEqual(self.get("pos_x"), 191)
-        self.assertEqual(self.get("pos_x") + 1, 192)  # opaque edge after wall X=191
+        self.assertEqual(self.get("pos_x", 1), 191)
+        self.assertEqual(self.get("pos_x", 1) + 1, 192)  # opaque edge after wall X=191
         self.assertEqual(self.get("hit_x"), 1)
 
     def test_default_ledge_top_lands_above_drawn_surface(self):
@@ -499,7 +512,7 @@ class BaselinePhysicsTests(unittest.TestCase):
                     self.position(180, 152, fraction=fraction)
                     for _ in range(30):
                         self.frame(direction)
-                    self.assertEqual(self.get("pos_x"), expected_x)
+                    self.assertEqual(self.get("pos_x", 1), expected_x)
                     self.assertEqual(self.get("hit_x"), 0)
                     self.assertGreater(self.get("pos_y", 1), 152)
 
@@ -514,12 +527,12 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.platform_records(*records)
                 self.position(184, 152, fraction=240)
                 self.frame(RIGHT)
-                self.assertEqual(self.get("pos_x"), 185)
+                self.assertEqual(self.get("pos_x", 1), 185)
                 self.assertEqual(self.get("pos_y", 1), 152)
                 self.assertEqual(self.get("pos_y"), 44)
                 self.assertEqual(self.get("hit_x"), 0)
                 self.assertEqual(self.get("hit_y"), 1)
-                self.assertEqual(self.get("vel_x"), 1)
+                self.assertEqual(self.get("vel_x", 1), 1)
 
     def test_real_wall_still_blocks_during_floor_correction(self):
         floor = (PLATFORM_FLAT, 0, 255, 192)
@@ -531,11 +544,11 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.position(138, 183, fraction=200)
                 self.velocity(256)
                 self.frame(RIGHT)
-                self.assertEqual(self.get("pos_x"), 138)
+                self.assertEqual(self.get("pos_x", 1), 138)
                 self.assertEqual(self.get("pos_y", 1), 184)
                 self.assertEqual(self.get("hit_x"), 1)
                 self.assertEqual(self.get("hit_y"), 1)
-                self.assertEqual(self.get("vel_x"), 0)
+                self.assertEqual(self.get("vel_x", 1), 0)
 
     @unittest.expectedFailure
     def test_recheck_finds_farther_wall_after_rejecting_false_near_wall(self):
@@ -549,18 +562,18 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.call("init_move")
                 self.platform_records(*records)
                 self.position(130, 151)
-                self.put("next_x", 155)
+                self.put("next_x", 155, 1)
                 self.put("next_y", 155, 1)
                 self.put("next_y", 99)
-                self.put("vel_x", 1)
+                self.put("vel_x", 1, 1)
                 self.call("apply_move_collision")
-                self.assertEqual(self.get("next_x"), 143)
+                self.assertEqual(self.get("next_x", 1), 143)
                 self.assertEqual(self.get("hit_x_position"), 143)
                 self.assertEqual(self.get("hit_x"), 1)
                 self.assertEqual(self.get("next_y", 1), 152)
                 self.assertEqual(self.get("next_y"), 99)
                 self.assertEqual(self.get("hit_y"), 1)
-                self.assertEqual(self.get("pos_x"), 130)
+                self.assertEqual(self.get("pos_x", 1), 130)
                 self.assertEqual(self.get("pos_y", 1), 151)
 
     @unittest.expectedFailure
@@ -569,11 +582,11 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.platform_records((PLATFORM_FLAT, 0, 255, 160),
                               (PLATFORM_WALL, 96, 160, 145))
         self.position(138, 151)
-        self.put("next_x", 139)
+        self.put("next_x", 139, 1)
         self.put("next_y", 161, 1)
-        self.put("vel_x", 1)
+        self.put("vel_x", 1, 1)
         self.call("apply_move_collision")
-        self.assertEqual(self.get("next_x"), 138)
+        self.assertEqual(self.get("next_x", 1), 138)
         self.assertEqual(self.get("next_y", 1), 152)
         self.assertEqual(self.get("hit_x"), 1)
         self.assertEqual(self.get("hit_y"), 1)
@@ -589,14 +602,14 @@ class BaselinePhysicsTests(unittest.TestCase):
                         self.position(180, 152, fraction=fraction)
                         for _ in range(40):
                             self.frame(outward)
-                            if self.get("pos_x") == edge:
+                            if self.get("pos_x", 1) == edge:
                                 break
-                        self.assertEqual(self.get("pos_x"), edge)
+                        self.assertEqual(self.get("pos_x", 1), edge)
                         for _ in range(delay):
                             self.frame()
                         for _ in range(40):
                             self.frame(inward)
-                            x, y = self.get("pos_x"), self.get("pos_y", 1)
+                            x, y = self.get("pos_x", 1), self.get("pos_y", 1)
                             # Opaque bounding box must not be inside the ledge.
                             inside = (160 <= x+1 and x+6 <= 191 and
                                       160 <= y+2 and y+7 <= 191)
@@ -611,15 +624,15 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.velocity(0)
                 self.frame(buttons)
                 self.assertEqual(self.get("hit_x"), 1)
-                self.assertEqual(self.get("pos_x"), corrected_x)
-                self.assertEqual(self.get("vel_x"), 0)
+                self.assertEqual(self.get("pos_x", 1), corrected_x)
+                self.assertEqual(self.get("vel_x", 1), 0)
 
     def test_player_can_jump_from_lower_floor_onto_ledge(self):
         self.position(146, 184)
         for _ in range(20):
             self.frame(JUMP | RIGHT)
-        self.assertGreaterEqual(self.get("pos_x") + 2, 160)
-        self.assertLessEqual(self.get("pos_x") + 5, 191)
+        self.assertGreaterEqual(self.get("pos_x", 1) + 2, 160)
+        self.assertLessEqual(self.get("pos_x", 1) + 5, 191)
         for _ in range(60):
             self.frame()
         self.assertEqual(self.get("pos_y", 1), 152)
@@ -673,13 +686,13 @@ class BaselinePhysicsTests(unittest.TestCase):
 
     def test_horizontal_input(self):
         self.frame(RIGHT)
-        self.assertEqual(self.get("pos_x"), 125)
-        self.assertEqual(self.get("next_x"), 125)
+        self.assertEqual(self.get("pos_x", 1), 125)
+        self.assertEqual(self.get("next_x", 1), 125)
         self.frame(LEFT)
-        self.assertEqual(self.get("pos_x"), 124)
+        self.assertEqual(self.get("pos_x", 1), 124)
         self.frame(LEFT | RIGHT)
-        self.assertEqual(self.get("pos_x"), 124)
-        self.assertEqual(self.get("vel_x"), 0)
+        self.assertEqual(self.get("pos_x", 1), 124)
+        self.assertEqual(self.get("vel_x", 1), 0)
 
     def test_platform_edges_use_inclusive_two_foot_overlap(self):
         self.platforms((120, 135, 144))
@@ -764,7 +777,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         for _ in range(60):
             self.frame()
         self.assertEqual(self.get("pos_y", 1), 184)
-        self.assertEqual(self.get("pos_x"), 124)
+        self.assertEqual(self.get("pos_x", 1), 124)
 
     def test_stationary_body_bottom_stays_one_pixel_above_ground(self):
         self.platforms((0, 255, 192))
@@ -782,7 +795,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.platforms((120, 135, 144))
         self.position(114, 136, fraction=250)
         self.frame(RIGHT)
-        self.assertEqual(self.get("pos_x"), 115)
+        self.assertEqual(self.get("pos_x", 1), 115)
         self.assertEqual(self.get("hit_y"), 1)
         self.assertEqual(self.get("pos_y", 1), 136)
 
@@ -793,16 +806,16 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.put("buttons", RIGHT)
         self.call("update_x")
         self.call("update_y")
-        self.assertEqual(self.get("pos_x"), 124)
+        self.assertEqual(self.get("pos_x", 1), 124)
         self.assertEqual(self.get("pos_y", 1), 183)
         self.assertEqual(self.get("pos_y"), 200)
-        self.assertEqual(self.get("next_x"), 125)
+        self.assertEqual(self.get("next_x", 1), 125)
         self.assertEqual(self.get("next_y", 1), 185)
         self.assertEqual(self.get("next_y"), 4)
         self.call("apply_move_collision")
         self.assertEqual(self.get("next_y", 1), 184)
         self.assertEqual(self.get("next_y"), 4)
-        self.assertEqual(self.get("pos_x"), 124)
+        self.assertEqual(self.get("pos_x", 1), 124)
         self.assertEqual(self.get("pos_y", 1), 183)
         self.assertEqual(self.get("pos_y"), 200)
 
@@ -821,7 +834,7 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.put("camera_x", camera)
                 self.put("ntable", 0)
                 self.frame(buttons)
-                self.assertEqual(self.get("pos_x"), expected_x)
+                self.assertEqual(self.get("pos_x", 1), expected_x)
                 self.assertEqual(self.get("camera_x"), expected_camera)
                 self.assertEqual(self.get("ntable"), expected_nt)
 
@@ -833,7 +846,7 @@ class BaselinePhysicsTests(unittest.TestCase):
                 self.put("ntable", 0)
                 for _ in range(50):
                     self.frame()
-                    self.assertEqual(self.get("pos_x"), x)
+                    self.assertEqual(self.get("pos_x", 1), x)
                 self.assertEqual(self.get("camera_x"), expected_camera)
                 self.assertEqual(self.get("ntable"), expected_nt)
 
@@ -841,7 +854,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.platforms((120, 135, 144))
         self.position(133, 136, fraction=250)
         self.frame(RIGHT)
-        self.assertEqual(self.get("pos_x"), 134)
+        self.assertEqual(self.get("pos_x", 1), 134)
         self.assertEqual(self.get("hit_y"), 0)
         self.assertEqual(self.get("pos_y", 1), 137)
 

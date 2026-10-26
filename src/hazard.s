@@ -22,14 +22,14 @@ check_hazards:
     cpx #0
     beq @safe
     clc
-    lda pos_x
+    lda pos_x+1
     adc #PLAYER_BODY_R_X
     bcs :+                  ; a right edge beyond 255 is beyond every x0
     cmp hazard_data, y
     bcc @next
 :
     clc
-    lda pos_x
+    lda pos_x+1
     adc #PLAYER_BODY_L_X
     bcs @next
     cmp hazard_data+1, y

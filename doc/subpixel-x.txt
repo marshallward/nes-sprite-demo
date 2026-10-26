@@ -1,0 +1,55 @@
+Subpixel horizontal movement
+============================
+
+pos_x, next_x and vel_x now each occupy two bytes in the same 8.8 layout as Y:
+
+    name     = fractional byte (1/256 pixel units)
+    name+1   = whole-pixel byte
+
+Positions are unsigned 8.8; velocity is signed 8.8. Walking uses ROM word
+walk_speed=$00C0 (0.75px/update), negated for leftward motion. Both directions
+cancel. No input stops velocity while retaining the current position fraction.
+There is no acceleration, drag, slope-speed normalization or launch mechanic.
+An uphill-speed table experiment was tried and reverted after gameplay feedback.
+Walking is again the same .75px horizontal speed on flat, uphill and downhill.
+
+Integration adds low bytes then high bytes with carry. Collision, camera, hazard
+tests, and sprite placement read integer X (+1). Surface/platform record formats
+and their known finite-span/contact-order limitations have not changed. A wall
+result writes corrected integer X and clears proposed X fraction and both velocity
+bytes. Floor correction affects Y only, preserving fractional X.
+
+Dash still uses the configured whole-pixel speed (currently 8px/update). Its
+one-pixel collision/hazard substeps preserve fractional X and use signed 8.8 unit
+velocity ($0100 or $FF00). Camera still updates once per game update. The normal
+8-bit-world wrap policy is unchanged; dash still cancels at its page boundary.
+
+Respawn/reset initialize both X bytes. This is extra precision, NOT 16-bit
+whole-pixel range: the world still spans 0..255.996 pixels. Wider world arithmetic
+is separate work. Rendering necessarily quantizes to pixels, so a .75px speed
+moves 3 screen pixels over four updates, not .75 of a displayed pixel.
+
+Memory: three additional zero-page bytes (pos_x/next_x/vel_x each grew by one),
+29/256 total. walk_speed is two ROM bytes. The reverted floor-type snapshot
+is not allocated; ordinary BSS is 10 bytes (death timer plus dash state).
+
+Tests
+-----
+
+The existing four suites use the explicitly documented 1px/update ROM-data
+fixture through BaselinePhysicsTests. This retains their old behavior comparisons
+while adapting byte addresses, rather than mixing layout and tuning changes.
+Only the walk_speed data word is changed in emulator memory; instructions and the
+on-disk ROM are unmodified. The CPU get/put helpers still read/write single bytes.
+
+tools/test_subpixel_x.py opts out of that fixture and tests the actual .75px ROM:
+right carry, left borrow, signed proposals, stopped/opposing inputs, walls and
+one-sided direction, both slopes, dash fraction retention, surface double tap,
+hazards/respawn, camera threshold and main-loop sprite X. All 13 tests pass.
+tools/profile_physics.py also opts out to measure the current actual speed.
+
+Headless Mesen verified 48 right updates move36px up the first ramp, then48
+left updates return36px to ground with correct fractional state. Temporary
+diagnostics: /tmp/opencode/subpixel-x-preview.lua, subpixel-x-trace.txt and
+subpixel-x-uphill.png. Old save states are incompatible with the changed RAM
+layout: reset/reload the ROM instead.

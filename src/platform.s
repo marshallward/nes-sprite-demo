@@ -201,14 +201,14 @@ check_surface:
 
     ; Pass through if x < x0
     clc
-    lda next_x
+    lda next_x+1
     adc #PLAYER_FOOT_R_X    ; A = x(n+1) + x_foot_r
     cmp platform_data+1, y  ; C = A >= x0
     bcc @no_contact
 
     ; Pass through if x > x1
     clc
-    lda next_x
+    lda next_x+1
     adc #PLAYER_FOOT_L_X    ; A = x(n+1) + x_foot_l
     cmp platform_data+2, y  ; C = A >= x1
     beq :+                  ; If Z, skip check
@@ -237,7 +237,7 @@ check_surface:
 
     ; Compute the contact point at pos_x
     clc
-    lda pos_x
+    lda pos_x+1
     adc #PLAYER_FOOT_R_X    ; A = x(n) + x_foot_r
     jsr surface_y_at_x      ; A = sloped y at x
     sec
@@ -251,7 +251,7 @@ check_surface:
 
     ; Compute the contact point at next_x
     clc
-    lda next_x
+    lda next_x+1
     adc #PLAYER_FOOT_R_X    ; A = x(n+1) + x_foot_r
     jsr surface_y_at_x      ; A = sloped y at x
     sec
@@ -368,6 +368,7 @@ surface_y_at_x:
 check_wall:
     ; Candidate detection only: never alter next_x/next_y or velocity here.
     lda vel_x
+    ora vel_x+1
     bne :+
     rts
 :
@@ -375,7 +376,7 @@ check_wall:
     lda platform_data, y
     cmp #PLATFORM_WALL_RIGHT
     bne @check_overlap
-    lda vel_x
+    lda vel_x+1
     bmi @check_overlap
     rts
 @check_overlap:
@@ -405,19 +406,19 @@ check_wall:
     ; TODO: Rewrite above to resemble the platform structure.
 
 @overlap:
-    lda vel_x
+    lda vel_x+1
     bmi @left
 
     ; Rightward crossing; ignore world-byte wrap until paging is implemented.
 
     ; If x(n+1) < x(n) (moving leftward) then skip rightward test
-    lda next_x
-    cmp pos_x
+    lda next_x+1
+    cmp pos_x+1
     bcc @no_right_hit
 
     ; Old right edge must be left of or exactly at the wall.
     clc
-    lda pos_x
+    lda pos_x+1
     adc #PLAYER_BODY_R_X
     bcs @no_right_hit
     cmp platform_data+3, y
@@ -427,7 +428,7 @@ check_wall:
 
     ; Check if x(n+1) is to the right of the wall
     clc
-    lda next_x
+    lda next_x+1
     adc #PLAYER_BODY_R_X
     bcs @no_right_hit
     cmp platform_data+3, y
@@ -452,13 +453,13 @@ check_wall:
     ; Leftward crossing; ignore world-byte wrap until paging is implemented.
 
     ; If x(n+1) >= x(n), skip the leftward test.
-    lda next_x
-    cmp pos_x
+    lda next_x+1
+    cmp pos_x+1
     bcs @no_left_hit
 
     ; Old left edge must be right of or exactly at the wall.
     clc
-    lda pos_x
+    lda pos_x+1
     adc #PLAYER_BODY_L_X
     bcs @no_left_hit
     cmp platform_data+3, y
@@ -466,7 +467,7 @@ check_wall:
 
     ; Check if the left body edge at x(n+1) reaches or passes left of the wall.
     clc
-    lda next_x
+    lda next_x+1
     adc #PLAYER_BODY_L_X
     bcs @no_left_hit
     cmp platform_data+3, y

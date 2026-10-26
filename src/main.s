@@ -24,7 +24,7 @@
     frame: .res 1
 
     ; Ball position (relative to origin?  I hope so)
-    pos_x: .res 1
+    pos_x: .res 2           ; 8.8: fraction first, whole pixels at pos_x+1
     ; 8.8 pixel resolution
     pos_y: .res 2
 
@@ -82,9 +82,11 @@ reset:
     sta $0202
 
     ; X position
+    lda #0
+    sta pos_x
     lda #124
     sta $0203
-    sta pos_x
+    sta pos_x+1
 
     ; Trigger DMA (direct memory addressing) to OAM (object attribute memory)
     lda #$00
@@ -158,7 +160,7 @@ main:
 @store_y:
     sta $0200
     sec
-    lda pos_x
+    lda pos_x+1
     sbc camera_x
     sta $0203
 

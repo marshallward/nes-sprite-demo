@@ -1,0 +1,104 @@
+First air-dash prototype
+=======================
+
+Surface double-tap extension
+----------------------------
+
+On floor/slope contact, tap Left or Right, release it, then press the same
+direction within SURFACE_DASH_TAP_WINDOW (12 updates). Holding or alternating
+directions does not start it; opposing simultaneous directions clear the pair.
+Tap pairs are forgotten in the air/during a burst, so no chained burst is queued.
+B remains reserved for future attack.
+
+Surface dash uses the same DASH_PIXELS/DASH_FRAMES settings as air dash. Floor
+contact carries rather than cancels this mode, including uphill/downhill following.
+Walls still stop it; hazards are checked on each pixel. Leaving the surface
+converts to the remaining gravity-free air burst, consumes the airborne charge
+and latches jump. A fresh A press while still supported cancels the surface burst
+and runs normal jumping, starting a new airtime. Air dash is still available after
+that legitimate jump. A has priority over a simultaneous second direction tap.
+
+Ground support does not recharge during an active burst. It recharges on the
+next ordinary supported update, so holding a direction cannot auto-chain dashes.
+Four extra ordinary-RAM bytes: surface-mode flag, previous direction bits, first
+tap direction, tap countdown. Nine dash bytes total; zero-page use is unchanged.
+Horizontal movement now uses 8.8 X; dash substeps retain the fractional byte
+and move the whole-pixel byte. Normal walking is .75px/update, while dash speed
+is unchanged. Existing dash suites use an explicit 1px walking fixture;
+tools/test_subpixel_x.py tests double-tap/dash at the shipped .75px speed too.
+
+python tools/test_surface_dash.py: 11 passing tests cover both directions, tap
+window/expiry, holding/opposing taps, no air double-tap, jumping/cancel priority,
+walls/spikes, slope following and edge conversion without a free jump. Headless
+Mesen verified double-tap -> ground -> 1:1 uphill -> air continuation (X20 ->85,
+including the first normal step). Sampled surface burst updates cost 10183 flat,
+10517 uphill, 12026 downhill cycles on this map, excluding controller/main-loop/
+NMI/DMA. These are representative samples, not worst-case bounds (~34..40% NTSC).
+The earlier air-dash section below describes air mode, not surface-mode contact.
+
+Input/behavior
+--------------
+
+Jump with A, then release/repress A while holding Left OR Right in air (not both).
+B dash was removed at the user's request; B is unassigned. Holding A through
+normal ascent does not trigger a dash or change variable-height jumping.
+The burst travels in that direction at 8 pixels/update for 8 updates (64 pixels total in
+open air), regardless of subsequent steering/button release. Vertical velocity
+is cleared; gravity and vertical integration are skipped throughout the burst.
+Fractional Y is held as well. Normal movement/gravity resumes the next update.
+
+One dash per airtime shared across directions, recharged on floor contact. Eligibility uses the previous
+update's hit_y, not vertical velocity (which is also near zero at the apex).
+Jump first, release A and press it again on a subsequent update; ground
+presses are not buffered. An airborne A re-press with direction is intentionally
+now a dash, not merely reapplying the held-ascent gravity modifier.
+Wall contact cancels the dash without recharging it. Floor/slope contact applies
+normal floor response and ends/recharges the burst. Those contacts may adjust Y;
+the dash does not ignore supporting geometry to maintain its height.
+Starting a dash also latches jump, including when entering the air by walking
+off rather than jumping. This prevents the dash's zero vertical velocity from
+allowing a midair jump after the burst. Landing/release rearms normally.
+
+Implementation
+--------------
+
+* src/dash.s: init_dash, update_dash; inc/dash.inc contains speed, duration and
+  return codes. Five air-dash state bytes plus four surface-tap/mode bytes.
+  No new zero-page allocations. Existing movement variables hold each proposal.
+* update_dash returns A=0 when ordinary movement should run, A=1 when it already
+  handled movement/camera, A=2 when it touched a hazard. src/game.s selects that
+  path before ordinary update_move and uses the existing death handler for hits.
+* Each dash update makes up to DASH_PIXELS one-pixel horizontal proposals and calls
+  existing apply_move_collision per pixel. Y integration is not repeated.
+  check_hazards runs after EVERY committed substep, stopping at first touch.
+  Camera follows once per game update, not four times. This is not teleporting
+  and does not require a general continuous collision solver.
+* init_dash runs on game initialization, death and respawn. Respawn also clears
+  stale floor contact because the safe spawn is in the air. Dash-specific X wrap
+  cancels the burst at 0/255; ordinary movement's broader boundary policy remains
+  deferred. Existing one-sided walls are honored; known corner-shape and mixed
+  contact limitations still apply. The rejected rescan remains disabled.
+
+Verification / cost
+-------------------
+
+python tools/test_dash.py executes 29 tests against the built ROM. Coverage:
+duration/distance/vertical hold, input edge and direction, air-only eligibility,
+apex, recharge/held-A behavior, wall/one-sided-wall/slope response, hazard path,
+safe travel above spikes, camera rate, boundary stop, and reset on respawn.
+Leftward tests mirror distance/vertical hold, locked direction, wall/one-sided-wall
+blocking, spike contact, shared recharge, camera rate and stopping at X=0.
+Additional A-mapping tests cover held jumps, release/repress in both directions,
+ignored B presses (with/without held A) and airborne A with no direction. Gameplay jump tests
+establish floor contact before the initial A press, as during ordinary play.
+The walk-off/dash regression checks both holding A and releasing/repressing A
+after the burst: neither may create another jump before landing. Distance tests
+read DASH_PIXELS/DASH_FRAMES from the built symbols rather than assuming speed4.
+
+Headless Mesen also verified jumping, a 32-pixel dash over spikes at Y=171,
+then resumed falling. HISTORICAL timing at 4 pixels/update: 3947..4796 cycles
+(13..16.1% of an NTSC frame), excluding controller/main-loop/NMI/DMA overhead.
+These samples do not describe the current 8-pixel speed and are NOT a worst-case
+bound. Up to eight scans now run per update; remeasure before using the old
+percentage as a budget. Flat movement and slope
+following rules themselves were not changed.

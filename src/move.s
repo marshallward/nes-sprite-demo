@@ -17,6 +17,9 @@
 
 .export init_move
 .export update_move
+.export apply_move_collision
+.export update_camera
+.export latch_jump
 .exportzp vel_x
 .exportzp vel_y
 .exportzp next_x
@@ -24,11 +27,11 @@
 
 ; These variables define movement state, and could be passed as inputs.
 .segment "ZEROPAGE"
-    ; Signed pixels/frame. Currently fixed to -1, 0, or 1.
-    vel_x: .res 1
+    ; Signed 8.8 pixels/frame, fractional byte first (like vel_y).
+    vel_x: .res 2
 
     ; x_pos precompute, to check if a wall has been crossed.
-    next_x: .res 1
+    next_x: .res 2
 
     ; 8.8 px resolution
     vel_y: .res 2
@@ -54,6 +57,11 @@ G_DOWN = 60
 X_FRAME_MIN = 96
 X_FRAME_MAX = 160
 
+.segment "RODATA"
+; 0.75 pixels/update. Data rather than instructions so test fixtures can also
+; run the historical 1px speed without changing the movement implementation.
+walk_speed: .word $00C0
+
 .setcpu "6502"
 .segment "CODE"
 
@@ -61,11 +69,21 @@ init_move:
     ; Initialize kinematic state
     lda #0
     sta vel_x
+    sta vel_x+1
     sta vel_y
     sta vel_y+1
     sta acc_y
     sta jump_latch
     sta next_x
+    sta next_x+1
+    rts
+
+
+latch_jump:
+    ; A dash entered by walking off an edge must also consume the jump latch.
+    ; Otherwise its zero vertical velocity can permit a new airborne impulse.
+    lda #1
+    sta jump_latch
     rts
 
 
@@ -77,6 +95,8 @@ update_move:
     ; Commit the corrected proposal only after collision has used old position.
     lda next_x
     sta pos_x
+    lda next_x+1
+    sta pos_x+1
     lda next_y
     sta pos_y
     lda next_y+1
@@ -88,38 +108,45 @@ update_move:
 update_x:
     lda #0
     sta vel_x
+    sta vel_x+1
 
 @check_right:
     lda buttons
-    and #%00000001  ; A = buttons && 01
+    and #%00000001
     beq @check_left
-    inc vel_x
+    lda walk_speed
+    sta vel_x
+    lda walk_speed+1
+    sta vel_x+1
 
 @check_left:
     lda buttons
-    and #%00000010  ; A = buttons && 10
+    and #%00000010
     beq @apply_x
-    dec vel_x
+    sec
+    lda vel_x
+    sbc walk_speed
+    sta vel_x
+    lda vel_x+1
+    sbc walk_speed+1
+    sta vel_x+1
 
-    ; NOTE: vel_x is zero if both 01 and 10 are pressed
+    ; Both directions cancel; no surface-dependent speed selection.
 
 @apply_x:
-    lda pos_x
-    sta next_x
-
-    lda vel_x
-    beq @end_x
-
     clc
-    lda next_x
+    lda pos_x
     adc vel_x
     sta next_x
+    lda pos_x+1
+    adc vel_x+1
+    sta next_x+1
 @end_x:
     rts
 
 update_camera:
     ; Catch up toward the frame even when the player is stationary.
-    lda pos_x
+    lda pos_x+1
     sec
     sbc camera_x
     cmp #X_FRAME_MAX+1
@@ -329,9 +356,11 @@ apply_move_collision:
     lda hit_x
     beq @check_floor
     lda hit_x_position
-    sta next_x
+    sta next_x+1
     lda #0
+    sta next_x             ; wall contact discards fractional penetration
     sta vel_x
+    sta vel_x+1
 @check_floor:
     ; Correct integer Y only; preserve the proposed fractional byte in next_y.
     lda hit_y

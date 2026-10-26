@@ -25,6 +25,27 @@ disappears for 45 updates, then respawns at the original safe starting position.
 Jump before reaching the tips to clear them. No health, lives, or knockback yet.
 Reset after rebuilding instead of loading an old save state.
 
+Air dash
+--------
+
+Jump with A, release it, then press A again while holding Left or Right in the
+air. Holding A throughout a jump does not dash. B is unassigned. The player dashes
+8 pixels per update for 8 updates, holding height until the burst finishes.
+One dash is available per airtime, recharged on landing. Release A before the
+next dash; holding a button does not retrigger. The selected direction stays fixed for
+the burst, and both directions share the one-air-dash limit. Wall or floor contact ends the burst,
+and spikes remain lethal. This is a dash through space, not a teleport.
+
+On the ground or a slope, double-tap Left or Right (release between presses,
+second press within 12 updates) to start a surface dash at the same speed.
+It follows the surface, continues in air after an edge, and can be interrupted
+by pressing A to jump. Holding a direction alone does not dash. B remains reserved.
+
+Horizontal movement now uses 8.8 fixed-point like Y. Walking is set to 0.75
+pixels/update for testing; dash remains 8 pixels/update. ``walk_speed`` in
+``src/move.s`` is a two-byte ROM setting (``$00C0`` = 192/256). This adds fractional
+precision, not a wider world; collision and rendering still use whole pixels.
+
 Baseline physics tests
 ----------------------
 
@@ -41,6 +62,9 @@ branch switch. No PPU, NMI, or controller hardware is emulated.
 These are characterization tests: they preserve the current landing,
 platform-edge, jump-timing, and latch behavior, including existing quirks.
 They do not specify improved physics or change the game's assembly.
+The historical suites explicitly use a 1-pixel ROM speed fixture to preserve
+their existing timing/position expectations. They execute the same movement
+instructions, with only ``walk_speed`` data replaced in emulated memory.
 
 Four tests are marked ``expectedFailure`` for deferred mixed floor/wall
 resolution (the experimental rescan is disabled). Their assertions remain
@@ -51,3 +75,15 @@ deliberately removed. Neither category means those issues are resolved.
 Hazard/death/respawn tests use the same built ROM and CPU harness::
 
     python3 tools/test_gameplay.py
+
+Dash behavior tests::
+
+    python3 tools/test_dash.py
+
+Surface double-tap tests::
+
+    python3 tools/test_surface_dash.py
+
+The subpixel-X suite tests the actual ROM default (no speed override)::
+
+    python3 tools/test_subpixel_x.py

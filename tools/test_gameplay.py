@@ -27,7 +27,7 @@ class GameplayTests(unittest.TestCase):
                 m.position(x, y)
                 m.call("check_hazards")
                 self.assertEqual(bool(m.cpu.p & 1), expected)
-                self.assertEqual(m.get("pos_x"), x)
+                self.assertEqual(m.get("pos_x", 1), x)
                 self.assertEqual(m.get("pos_y", 1), y)
 
     def test_spawn_is_safe(self):
@@ -36,7 +36,7 @@ class GameplayTests(unittest.TestCase):
         for _ in range(120):
             self.frame()
             self.assertEqual(m.get("death_timer"), 0)
-        self.assertEqual(m.get("pos_x"), 124)
+        self.assertEqual(m.get("pos_x", 1), 124)
         self.assertEqual(m.get("pos_y", 1), 184)
 
     def test_walking_into_spikes_starts_death_pause(self):
@@ -45,9 +45,9 @@ class GameplayTests(unittest.TestCase):
         self.frame(physics.RIGHT)
         self.assertEqual(m.get("death_timer"), 0)
         self.frame(physics.RIGHT)
-        self.assertEqual(m.get("pos_x"), 202)
+        self.assertEqual(m.get("pos_x", 1), 202)
         self.assertEqual(m.get("death_timer"), 45)
-        self.assertEqual(m.get("vel_x"), 0)
+        self.assertEqual(m.get("vel_x", 1), 0)
         self.assertEqual(m.get("vel_y"), 0)
         self.assertEqual(m.get("vel_y", 1), 0)
         self.assertEqual(m.get("jump_latch"), 0)
@@ -57,31 +57,32 @@ class GameplayTests(unittest.TestCase):
         m.position(210, 184, fraction=200)
         self.frame()
         self.assertEqual(m.get("death_timer"), 45)
-        position = (m.get("pos_x"), m.get("pos_y", 1), m.get("pos_y"))
+        position = (m.get("pos_x", 1), m.get("pos_y", 1), m.get("pos_y"))
         camera = m.get("camera_x")
         for remaining in range(44, 0, -1):
             self.frame(physics.JUMP | physics.RIGHT)
             self.assertEqual(m.get("death_timer"), remaining)
-            self.assertEqual((m.get("pos_x"), m.get("pos_y", 1), m.get("pos_y")), position)
+            self.assertEqual((m.get("pos_x", 1), m.get("pos_y", 1), m.get("pos_y")), position)
             self.assertEqual(m.get("camera_x"), camera)
         m.put("ntable", 1)
         self.frame(physics.JUMP | physics.RIGHT)
         self.assertEqual(m.get("death_timer"), 0)
-        self.assertEqual(m.get("pos_x"), 124)
+        self.assertEqual(m.get("pos_x", 1), 124)
         self.assertEqual(m.get("pos_y", 1), 160)
         for name in ("pos_y", "camera_x", "ntable", "vel_x", "vel_y", "jump_latch"):
             self.assertEqual(m.get(name), 0)
         self.assertEqual(m.get("vel_y", 1), 0)
         self.frame(physics.RIGHT)
-        self.assertEqual(m.get("pos_x"), 125)
+        self.assertEqual(m.get("pos_x", 1), 125)
 
     def test_jump_can_clear_spike_patch(self):
         m = self.machine
         m.position(196, 184)  # leave enough room for the body to rise above tips
+        self.frame()        # establish grounded state, as during ordinary play
         for _ in range(34):
             self.frame(physics.JUMP | physics.RIGHT)
             self.assertEqual(m.get("death_timer"), 0)
-        self.assertEqual(m.get("pos_x"), 230)
+        self.assertEqual(m.get("pos_x", 1), 230)
 
     def test_falling_onto_spikes_kills(self):
         m = self.machine
