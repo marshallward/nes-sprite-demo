@@ -1,5 +1,4 @@
-; A re-press + Left/Right in air starts a burst. Holding A does not retrigger.
-; On a surface, double-tap a direction instead. B stays unassigned.
+; Double-tap Left/Right for a surface or air burst. A only jumps; B is unassigned.
 .include "dash.inc"
 .export init_dash, update_dash
 .import apply_move_collision, update_camera, check_hazards, latch_jump
@@ -13,7 +12,7 @@ dash_steps: .res 1           ; loop counter; collision/hazard routines use X/Y
 dash_direction: .res 1       ; signed step (-1 or +1), fixed for the burst
 dash_surface: .res 1         ; ground burst follows contact until leaving an edge
 dash_dirs_down: .res 1       ; previous Left/Right bits for distinct tap presses
-dash_tap_direction: .res 1   ; direction of the first surface tap
+dash_tap_direction: .res 1   ; direction of the first tap
 dash_tap_timer: .res 1
 
 .setcpu "6502"
@@ -42,7 +41,7 @@ update_dash:
     sta dash_used
 :
     ; Newly pressed = current buttons AND NOT previous buttons.
-    ; A handles jump/air dash; direction taps are handled separately below.
+    ; A can interrupt a supported burst to jump, but never starts an air dash.
     ; B stays unassigned.
     lda dash_button_down
     eor #$FF
@@ -53,13 +52,13 @@ update_dash:
     and #%10000000
     sta dash_button_down
     txa
-    beq @surface_input
+    beq @dash_input
     lda hit_y
-    beq @air_press
+    beq @dash_input
     lda dash_surface
     bne @ground_jump        ; A can jump out of a surface burst
     lda dash_timer
-    bne @surface_input
+    bne @dash_input
 @ground_jump:
     lda #0
     sta dash_timer
@@ -69,33 +68,14 @@ update_dash:
     sta dash_tap_direction
     lda #DASH_NONE          ; ordinary movement applies the normal jump impulse
     rts
-@air_press:
-    lda dash_timer
-    bne @surface_input
-    lda dash_used
-    bne @surface_input
-    lda buttons
-    and #%00000011
-    cmp #%00000001          ; Right, without Left
-    beq @right
-    cmp #%00000010          ; Left, without Right
-    bne @surface_input
-    lda #$FF
-    bne @direction
-@right:
-    lda #1
-@direction:
-    sta dash_direction
-    lda #0
-    sta dash_surface
-    jsr latch_jump          ; dash must not permit an airborne jump afterward
-    jmp @start
-@surface_input:
-    jsr try_surface_dash
+@dash_input:
+    jsr try_dash
     bcc @active
     sta dash_direction
-    lda #1
+    lda hit_y
     sta dash_surface
+    bne @start
+    jsr latch_jump          ; dash must not permit an airborne jump afterward
 @start:
     lda #DASH_FRAMES
     sta dash_timer
@@ -195,9 +175,9 @@ update_dash:
     rts
 
 
-try_surface_dash:
+try_dash:
     ; C=1 and A=signed direction on a valid second tap; otherwise C=0.
-    ; Always track held directions, but forget tap pairs in air/during a burst.
+    ; Track taps across takeoff/landing, but not during a burst or after air use.
     lda dash_dirs_down
     eor #$FF
     and buttons
@@ -211,7 +191,10 @@ try_surface_dash:
     lda dash_timer
     bne @reset
     lda hit_y
-    beq @reset
+    bne @eligible
+    lda dash_used
+    bne @reset
+@eligible:
     txa
     cmp #1
     beq @tap
@@ -242,7 +225,7 @@ try_surface_dash:
 @first:
     txa
     sta dash_tap_direction
-    lda #SURFACE_DASH_TAP_WINDOW
+    lda #DASH_TAP_WINDOW
     sta dash_tap_timer
     jmp @none
 @reset:

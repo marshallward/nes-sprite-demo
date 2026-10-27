@@ -28,11 +28,11 @@ Reset after rebuilding instead of loading an old save state.
 Air dash
 --------
 
-Jump with A, release it, then press A again while holding Left or Right in the
-air. Holding A throughout a jump does not dash. B is unassigned. The player dashes
+Double-tap Left or Right (release between presses, second press within 12 updates)
+to dash, on the ground or in the air. A only jumps; B is unassigned. The player dashes
 8 pixels per update for 8 updates, holding height until the burst finishes.
-One dash is available per airtime, recharged on landing. Release A before the
-next dash; holding a button does not retrigger. The selected direction stays fixed for
+One dash is available per airtime, recharged on landing. Holding a direction
+does not retrigger. The selected direction stays fixed for
 the burst, and both directions share the one-air-dash limit. Wall or floor contact ends the burst,
 and spikes remain lethal. This is a dash through space, not a teleport.
 

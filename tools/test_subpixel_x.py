@@ -122,8 +122,11 @@ class SubpixelXTests(unittest.TestCase):
         m.position(80, 120, fraction=123, x_fraction=192)
         m.put("hit_y", 0)
         speed, duration = m.symbols["DASH_PIXELS"], m.symbols["DASH_FRAMES"]
+        for buttons in (RIGHT, 0):
+            m.put("buttons", buttons)
+            m.call("update_dash")
         for step in range(1, duration+1):
-            self.frame(JUMP | RIGHT, gameplay=True)
+            self.frame(RIGHT, gameplay=True)
             self.assertEqual(self.word("pos_x"), (80+step*speed)*256+192)
             self.assertEqual(m.get("pos_y", 1), 120)
             self.assertEqual(m.get("pos_y"), 123)

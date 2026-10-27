@@ -4,10 +4,11 @@ First air-dash prototype
 Surface double-tap extension
 ----------------------------
 
-On floor/slope contact, tap Left or Right, release it, then press the same
-direction within SURFACE_DASH_TAP_WINDOW (12 updates). Holding or alternating
+On floor/slope contact or in the air, tap Left or Right, release it, then press the same
+direction within DASH_TAP_WINDOW (12 updates). Holding or alternating
 directions does not start it; opposing simultaneous directions clear the pair.
-Tap pairs are forgotten in the air/during a burst, so no chained burst is queued.
+Tap pairs can span leaving a ledge or landing. They are forgotten during a burst
+or after consuming the air charge, so no chained burst is queued.
 B remains reserved for future attack.
 
 Surface dash uses the same DASH_PIXELS/DASH_FRAMES settings as air dash. Floor
@@ -27,8 +28,8 @@ and move the whole-pixel byte. Normal walking is .75px/update, while dash speed
 is unchanged. Existing dash suites use an explicit 1px walking fixture;
 tools/test_subpixel_x.py tests double-tap/dash at the shipped .75px speed too.
 
-python tools/test_surface_dash.py: 11 passing tests cover both directions, tap
-window/expiry, holding/opposing taps, no air double-tap, jumping/cancel priority,
+python tools/test_surface_dash.py covers both directions, tap
+window/expiry, holding/opposing taps, air double-tap, jumping/cancel priority,
 walls/spikes, slope following and edge conversion without a free jump. Headless
 Mesen verified double-tap -> ground -> 1:1 uphill -> air continuation (X20 ->85,
 including the first normal step). Sampled surface burst updates cost 10183 flat,
@@ -39,9 +40,9 @@ The earlier air-dash section below describes air mode, not surface-mode contact.
 Input/behavior
 --------------
 
-Jump with A, then release/repress A while holding Left OR Right in air (not both).
-B dash was removed at the user's request; B is unassigned. Holding A through
-normal ascent does not trigger a dash or change variable-height jumping.
+Double-tap Left OR Right in air (not both), just like on the ground.
+A only jumps; releasing/repressing it never triggers a dash. B is unassigned.
+Directional double-taps work whether A is held or released.
 The burst travels in that direction at 8 pixels/update for 8 updates (64 pixels total in
 open air), regardless of subsequent steering/button release. Vertical velocity
 is cleared; gravity and vertical integration are skipped throughout the burst.
@@ -49,9 +50,8 @@ Fractional Y is held as well. Normal movement/gravity resumes the next update.
 
 One dash per airtime shared across directions, recharged on floor contact. Eligibility uses the previous
 update's hit_y, not vertical velocity (which is also near zero at the apex).
-Jump first, release A and press it again on a subsequent update; ground
-presses are not buffered. An airborne A re-press with direction is intentionally
-now a dash, not merely reapplying the held-ascent gravity modifier.
+A supported jump press takes priority over a simultaneous direction tap and
+clears the pending pair. Airborne A presses do not affect tap detection.
 Wall contact cancels the dash without recharging it. Floor/slope contact applies
 normal floor response and ends/recharges the burst. Those contacts may adjust Y;
 the dash does not ignore supporting geometry to maintain its height.
@@ -82,14 +82,14 @@ Implementation
 Verification / cost
 -------------------
 
-python tools/test_dash.py executes 29 tests against the built ROM. Coverage:
-duration/distance/vertical hold, input edge and direction, air-only eligibility,
-apex, recharge/held-A behavior, wall/one-sided-wall/slope response, hazard path,
+python tools/test_dash.py tests the built ROM. Coverage:
+duration/distance/vertical hold, double-tap timing and direction, held-A input,
+apex, recharge behavior, wall/one-sided-wall/slope response, hazard path,
 safe travel above spikes, camera rate, boundary stop, and reset on respawn.
 Leftward tests mirror distance/vertical hold, locked direction, wall/one-sided-wall
 blocking, spike contact, shared recharge, camera rate and stopping at X=0.
-Additional A-mapping tests cover held jumps, release/repress in both directions,
-ignored B presses (with/without held A) and airborne A with no direction. Gameplay jump tests
+Additional input tests cover double-taps while holding jump, ignored A re-presses
+and B presses, and supported jump priority. Gameplay jump tests
 establish floor contact before the initial A press, as during ordinary play.
 The walk-off/dash regression checks both holding A and releasing/repressing A
 after the burst: neither may create another jump before landing. Distance tests

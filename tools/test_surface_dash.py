@@ -14,7 +14,7 @@ class SurfaceDashTests(unittest.TestCase):
         self.machine.setUp()
         self.speed = self.machine.symbols["DASH_PIXELS"]
         self.duration = self.machine.symbols["DASH_FRAMES"]
-        self.window = self.machine.symbols["SURFACE_DASH_TAP_WINDOW"]
+        self.window = self.machine.symbols["DASH_TAP_WINDOW"]
         self.reset_ground()
 
     def frame(self, buttons=0):
@@ -80,13 +80,13 @@ class SurfaceDashTests(unittest.TestCase):
                 self.frame(second)
                 self.assertEqual(m.get("dash_timer"), 0)
 
-    def test_direction_double_tap_does_not_start_an_air_dash(self):
+    def test_direction_double_tap_starts_an_air_dash(self):
         m = self.machine
         m.position(80, 120)
         m.put("hit_y", 0)
         self.double_tap(RIGHT)
-        self.assertEqual(m.get("pos_x", 1), 82)
-        self.assertEqual(m.get("dash_timer"), 0)
+        self.assertEqual(m.get("pos_x", 1), 81+self.speed)
+        self.assertEqual(m.get("dash_timer"), self.duration-1)
 
     def test_jump_press_wins_over_second_direction_tap(self):
         m = self.machine
@@ -108,7 +108,7 @@ class SurfaceDashTests(unittest.TestCase):
         self.assertEqual(m.get("dash_surface"), 0)
         self.assertEqual(m.get("dash_used"), 0)
         self.frame()
-        self.frame(JUMP | RIGHT)
+        self.double_tap(RIGHT)
         self.assertEqual(m.get("dash_timer"), self.duration-1)
 
     def test_wall_stops_surface_dash(self):
