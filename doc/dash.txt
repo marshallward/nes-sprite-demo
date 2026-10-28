@@ -1,0 +1,40 @@
+Dash reimplementation — step 1: input only
+=========================================
+
+No burst movement yet. Walking, jumping, slopes and camera behavior are
+unchanged.  Spikes and subpixel horizontal movement are not included.
+
+src/dash.s owns two bytes: first-tap direction and a countdown. Previous button
+state belongs to src/pad.s (buttons_prev). init_move resets the tap state
+through init_dash; update_move calls read_dash once per update, before ordinary
+movement.
+
+read_dash:
+
+* Finds new presses with current buttons AND NOT previous buttons.
+
+* Saves a first directional press and starts a 12-update countdown.
+
+* Returns +1 (Right) or -1 (Left) for a matching second press before expiry.
+
+* Returns zero otherwise. Holding a direction never counts as another press.
+
+* An opposite press starts a new pair; both directions together cancel the pair.
+
+* A completed pair is consumed. A and B do not affect detection.
+
+update_move deliberately ignores the return value for now. Input detection has
+no ground/air rules yet; those belong to dash eligibility, not the gesture.
+
+Build with make, then run python3 tools/test_dash_input.py (requires py65).
+
+Next review steps, each kept separate:
+
+1. A basic air burst: fixed horizontal direction/duration and suspended
+   gravity.
+
+2. Safe movement substeps, wall/floor cancellation and world boundaries.
+
+3. One dash per airtime, landing recharge and jump-latch interactions.
+
+4. Surface bursts and their slope/edge/jump behavior.

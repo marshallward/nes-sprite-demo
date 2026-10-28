@@ -3,14 +3,22 @@ JOYPAD2 = $4017
 
 ; Setup fast IO in zeropage
 .segment "ZEROPAGE"
+
 buttons: .res 1
-.exportzp buttons
+
+buttons_prev: .res 1
+    ; held buttons from the previous controller read
+
+.exportzp buttons, buttons_prev
 
 
 .setcpu "6502"
 .segment "CODE"
 
 read_joypad1:
+    lda buttons
+    sta buttons_prev
+
     ; The NES controller is read in two stages:
     ;
     ; 1. Tell the controller to read the values.

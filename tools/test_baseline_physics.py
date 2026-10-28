@@ -84,6 +84,7 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.fail(f"{name} did not return")
 
     def frame(self, buttons=0):
+        self.put("buttons_prev", self.get("buttons"))
         self.put("buttons", buttons)
         self.call("update_move")
 

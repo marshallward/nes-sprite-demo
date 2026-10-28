@@ -14,6 +14,7 @@
 .importzp buttons
 
 .import apply_platform_collision
+.import init_dash, read_dash
 
 .export init_move
 .export update_move
@@ -66,10 +67,12 @@ init_move:
     sta acc_y
     sta jump_latch
     sta next_x
-    rts
+    jmp init_dash
 
 
 update_move:
+    ; First dash step: track taps, but don't act on the result yet.
+    jsr read_dash
     jsr update_x
     jsr update_y
     jsr apply_move_collision
