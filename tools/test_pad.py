@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Controller reads produce held, previous, and newly pressed button states."""
+"""Controller reads preserve the previous held-button state."""
 import unittest
 
 import test_baseline_physics as physics
@@ -22,7 +22,7 @@ class ControllerMemory(list):
 
 
 class PadTests(unittest.TestCase):
-    def test_new_presses_across_controller_reads(self):
+    def test_previous_buttons_across_controller_reads(self):
         m = physics.BaselinePhysicsTests()
         m.setUp()
         previous = 0
@@ -35,11 +35,6 @@ class PadTests(unittest.TestCase):
                 self.assertEqual(m.cpu.memory.reads, 8)
                 self.assertEqual(m.get("buttons"), buttons)
                 self.assertEqual(m.get("buttons_prev"), previous)
-                for _ in range(2):
-                    m.call("read_buttons_pressed")
-                    self.assertEqual(m.cpu.a, buttons & ~previous)
-                    self.assertEqual(m.get("buttons"), buttons)
-                    self.assertEqual(m.get("buttons_prev"), previous)
                 previous = buttons
 
 

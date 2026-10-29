@@ -39,6 +39,7 @@ $(CHR): assets/ball.bin tools/gen_chr.py | $(BUILD)
 # Compile the main program
 $(BUILD)/main.o: $(INC)/ppu.inc $(INC)/apu.inc $(INC)/boot.inc
 $(BUILD)/bg.o: $(INC)/ppu.inc
+$(BUILD)/move.o $(BUILD)/dash.o: $(INC)/dash.inc
 
 $(BUILD)/%.o: $(SRC)/%.s | $(BUILD)
 	$(AS) -g -t none -I inc -o $@ $<

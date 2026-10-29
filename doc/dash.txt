@@ -1,13 +1,12 @@
-Dash reimplementation — step 1: input only
-=========================================
+Dash reimplementation
+=====================
 
-No burst movement yet. Walking, jumping, slopes and camera behavior are
-unchanged.  Spikes and subpixel horizontal movement are not included.
+Step 1: input only
+------------------
 
-src/dash.s owns two bytes: first-tap direction and a countdown. Previous button
+The initial step added two bytes: first-tap direction and a countdown. Previous button
 state belongs to src/pad.s (buttons_prev). init_move resets the tap state
-through init_dash; update_move calls read_dash once per update, before ordinary
-movement.
+through init_dash. The gesture is read once per movement update.
 
 read_dash:
 
@@ -24,8 +23,8 @@ read_dash:
 
 * A completed pair is consumed. A and B do not affect detection.
 
-update_move deliberately ignores the return value for now. Input detection has
-no ground/air rules yet; those belong to dash eligibility, not the gesture.
+Initially update_move ignored the return value. read_dash itself has no
+ground/air rules; those belong to dash eligibility, not the gesture.
 
 Build with make, then run python3 tools/test_dash_input.py (requires py65).
 
@@ -37,16 +36,84 @@ update_y. The velocity routines contain the existing walking, jump and gravity
 rules. The position routines only compute next = position + velocity; they do
 not read buttons or apply acceleration. Collision and commit are unchanged.
 
-This is a behavior-preserving split, not a dash burst yet. Dash can later
-select different velocity rules while sharing the position and collision code.
+This was a behavior-preserving split to let dash select different velocity rules
+while sharing the position and collision code.
+
+Step 3: basic air burst
+-----------------------
+
+The initial burst implementation started only when the previous update
+reported no supporting floor contact (hit_y=0). It stores a signed dash_velocity
+and a dash_timer, separate from the tap-window timer. DASH_SPEED=8 pixels/update;
+DASH_FRAMES=8 updates, including the second-tap update.
+
+During the burst, update_dash sets vel_x to the fixed burst velocity, clears
+vel_y and returns A=1. update_move skips the normal velocity routines, clears
+acc_y and sets jump_latch so zero vertical velocity cannot enable a midair jump.
+update_x, update_y, collision resolution, position commit and camera remain shared.
+
+Initially stop_dash_on_contact cleared the timer after wall or floor/slope contact.
+Input cannot steer or extend the burst, and taps during it are not queued.
+After the last burst update, walking/gravity resume normally on the next update.
+A remains jump-only. At this step ground double-taps still walked. Another
+double-tap in the same airtime is allowed; the charge limit is a later step.
+
+No substeps were added: collision uses the normal old/proposed positions.
+Tests cover wall crossings in both directions, a one-sided exit, and uphill
+slope contact; existing mixed-contact limitations and horizontal byte-wrap
+behavior are unchanged. Spikes and subpixel X are not included.
+
+Run python3 tools/test_dash.py for burst tests after rebuilding.
+
+Step 4: surface bursts and slope launches
+----------------------------------------
+
+A double-tap now starts a burst from support too. The new dash_mode byte
+distinguishes an air-started burst, a surface burst, and a surface-to-air launch.
+Surface floor contact carries the burst instead of cancelling it. A fresh A
+press while supported interrupts it for an ordinary jump; jumping also wins
+over a simultaneous second direction tap.
+
+Collision reports hit_y_slope for the selected supporting surface: 0 for flat,
+-1 for 1:1 slopes, -2 for 2:1 slopes. Surface velocity is the signed horizontal
+speed multiplied by this gradient. Thus a rightward 1:1 dash has velocity
+(+8, -8), and a rightward 2:1 dash has (+8, -16). This keeps horizontal speed
+constant, not total speed along the diagonal.
+
+Resting collision now also recognizes an upward trajectory exactly following
+a rising slope's resting height. Proposals above that height still detach;
+upward subpixel movement on flat ground still detaches as before.
+
+When a surface burst loses support, its current velocity is retained for the
+remaining burst updates. This includes launches on the first burst update and
+flat ledge exits (zero initial vertical velocity). Once the timer expires,
+update_dash returns DASH_COAST: keep horizontal velocity, but run ordinary
+vertical rules so gravity resumes. Landing or wall contact ends the coast;
+directional input alone does not steer it. A fresh airborne double-tap starts
+a horizontal burst instead, clearing the launch's vertical velocity.
+
+update_x and update_y remain unchanged. finish_dash_move replaces the old
+stop_dash_on_contact routine to distinguish carrying support from landing.
+inc/dash.inc documents the three velocity-selection results for update_move.
+
+Coordinate limits have not changed: X/Y still have 8-bit whole-pixel positions.
+Fast slope launches can reach the top of the screen and expose the existing
+Y-wrap behavior; no ceiling or scrolling-world policy is added in this step.
+Mixed floor/wall and endpoint-overlap collision limitations also remain.
+
+Run python3 tools/test_surface_dash.py for slope/launch regression tests.
+
+Camera catch-up
+----------------
+
+The existing screen-X tracking frame remains 96..160. Outside that frame,
+update_camera now scrolls 1 + floor(distance outside / 4) pixels per update,
+instead of always one pixel. Near the frame, walking/catch-up remains slow;
+farther away it speeds up enough to track dash velocity. When the ball slows
+or stops, decreasing distance slows the camera until it reaches the frame.
+There is no extra camera state or dash-specific camera path. Camera byte-wrap
+still toggles ntable in either direction. Tests: tools/test_camera.py.
 
 Next review steps, each kept separate:
-
-1. A basic air burst: fixed horizontal direction/duration and suspended
-   gravity.
-
-2. Safe movement substeps, wall/floor cancellation and world boundaries.
-
-3. One dash per airtime, landing recharge and jump-latch interactions.
-
-4. Surface bursts and their slope/edge/jump behavior.
+1. One dash per airtime and landing recharge.
+2. Review boundary behavior and any further high-speed collision cases.

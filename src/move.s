@@ -1,4 +1,5 @@
 ; Player movement physics
+.include "dash.inc"
 
 ; For now take this address from main, but maybe it should be an input?
 .importzp pos_x
@@ -14,7 +15,7 @@
 .importzp buttons
 
 .import apply_platform_collision
-.import init_dash, read_dash
+.import init_dash, update_dash, finish_dash_move
 
 .export init_move
 .export update_move
@@ -71,15 +72,30 @@ init_move:
 
 
 update_move:
-    ; First dash step: track taps, but don't act on the result yet.
-    jsr read_dash
+    jsr update_dash
+    cmp #DASH_BURST
+    bne @normal_velocity
+
+    ; Dash supplied velocity: skip gravity and prevent a new airborne jump.
+    lda #0
+    sta acc_y
+    lda #1
+    sta jump_latch
+    jmp @propose
+
+@normal_velocity:
+    cmp #DASH_COAST
+    beq @vertical_velocity  ; slope launch keeps horizontal momentum until contact
     jsr set_velocity_x
+@vertical_velocity:
     jsr set_velocity_y
 
+@propose:
     ; Propose movement using the selected velocities, then resolve contacts.
     jsr update_x
     jsr update_y
     jsr apply_move_collision
+    jsr finish_dash_move
 
     ; Commit the corrected proposal only after collision has used old position.
     lda next_x
@@ -129,6 +145,8 @@ update_x:
 
 update_camera:
     ; Catch up toward the frame even when the player is stationary.
+    ; Scroll 1 + (distance outside the frame / 4) pixels per update.
+    ; Fast movement pushes farther outside, so the camera speeds up to follow.
     lda pos_x
     sec
     sbc camera_x
@@ -141,9 +159,14 @@ update_camera:
     rts
 
 @scroll_right:
+    sec
+    sbc #X_FRAME_MAX
+    lsr a
+    lsr a
     clc
-    lda camera_x
     adc #1
+    clc
+    adc camera_x
     sta camera_x
     bcc @end_x
     lda ntable
@@ -152,9 +175,19 @@ update_camera:
     rts
 
 @scroll_left:
+    ; A is screen X. Compute X_FRAME_MIN - A without a scratch byte.
+    eor #$FF
+    clc
+    adc #X_FRAME_MIN+1
+    lsr a
+    lsr a
+    clc
+    adc #1
+
+    ; camera_x -= step. Addition's carry is set when there was no borrow.
+    eor #$FF
     sec
-    lda camera_x
-    sbc #1
+    adc camera_x
     sta camera_x
     bcs @end_x
     lda ntable

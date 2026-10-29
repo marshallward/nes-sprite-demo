@@ -9,6 +9,7 @@
 ; Platform collision output
 .exportzp hit_y
 .exportzp hit_y_position
+.exportzp hit_y_slope
 .exportzp hit_x
 .exportzp hit_x_position
 
@@ -31,6 +32,10 @@ hit_y:
     .res 1
 hit_y_position:
     ; Collision-adjusted y position
+    .res 1
+hit_y_slope:
+    ; Supporting surface's Y change per pixel right: flat=0, slopes=-1 or -2.
+    ; Valid only while hit_y is set.
     .res 1
 
 hit_x:
@@ -128,6 +133,7 @@ init_platforms:
     lda #0
     sta hit_y
     sta hit_x
+    sta hit_y_slope
     rts
 
 
@@ -268,14 +274,27 @@ check_surface:
     bcs @floor_contact
 
     ; This block gives a more robust definition of contact:
-    ; - Velocity is not upward
+    ; - Velocity is not upward, or follows a rising slope's resting height
     ; - previous position (pos_y) was not on platform (old_contact_y)
     ;   (where "contact" is one pixel above the platform)
     ;
     ; This test prevents the jitter caused by a slope falling faster than
     ; gravity.  It forces "contact" during any movement.
     lda vel_y+1
-    bmi @no_contact     ; If vel_y is upward (negative) then no contact
+    bpl @check_resting
+
+    ; Upward world velocity can still follow a rising slope. Keep support only
+    ; if the proposal remains exactly at its resting height, not above it.
+    ; A subpixel rise on flat ground must still detach, not stick to the floor.
+    lda next_y+1
+    cmp pos_y+1
+    bcs @no_contact
+    lda contact_y
+    sec
+    sbc #1
+    cmp next_y+1
+    bne @no_contact
+@check_resting:
     lda old_contact_y
     sec
     sbc #1
@@ -311,6 +330,16 @@ check_surface:
     ; Contact was proven, and the new contact_y is the highest record.
     ; Store the new contact point as the new hit_y_position.
     sta hit_y_position
+    lda platform_data, y
+    cmp #PLATFORM_FLAT
+    beq @flat_slope
+    ; The two slope types are 0 and 1, giving signed gradients -1 and -2.
+    eor #$FF
+    jmp @store_slope
+@flat_slope:
+    lda #0
+@store_slope:
+    sta hit_y_slope
     lda #1
     sta hit_y
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Double-tap detection only; movement must remain unchanged at this stage."""
+"""Double-tap gesture detection and its connection to movement."""
 import unittest
 
 import test_baseline_physics as physics
@@ -87,11 +87,12 @@ class DashInputTests(unittest.TestCase):
         self.assertEqual(m.get("buttons_prev"), JUMP)
         self.assertEqual(m.get("buttons"), JUMP | RIGHT)
 
-    def test_movement_still_walks_on_double_tap(self):
+    def test_movement_uses_double_tap_result(self):
         m = self.machine
         m.platforms((0, 255, 192))
         m.position(80, 184)
-        for buttons, x in ((RIGHT, 81), (0, 81), (RIGHT, 82)):
+        speed = m.symbols["DASH_SPEED"]
+        for buttons, x in ((RIGHT, 81), (0, 81), (RIGHT, 81+speed)):
             m.frame(buttons)
             self.assertEqual(m.get("pos_x"), x)
             self.assertEqual(m.get("pos_y", 1), 184)

@@ -853,6 +853,7 @@ class BaselinePhysicsTests(unittest.TestCase):
             (159, 255, RIGHT, 160, 0, 1),
         ):
             with self.subTest(x=x, camera=camera, buttons=buttons):
+                self.call("init_move")  # each camera fixture starts without pending taps
                 self.position(x, 160)
                 self.put("camera_x", camera)
                 self.put("ntable", 0)
