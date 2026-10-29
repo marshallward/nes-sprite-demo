@@ -73,6 +73,10 @@ init_move:
 update_move:
     ; First dash step: track taps, but don't act on the result yet.
     jsr read_dash
+    jsr set_velocity_x
+    jsr set_velocity_y
+
+    ; Propose movement using the selected velocities, then resolve contacts.
     jsr update_x
     jsr update_y
     jsr apply_move_collision
@@ -88,7 +92,7 @@ update_move:
     jmp update_camera
 
 
-update_x:
+set_velocity_x:
     lda #0
     sta vel_x
 
@@ -101,12 +105,15 @@ update_x:
 @check_left:
     lda buttons
     and #%00000010  ; A = buttons && 10
-    beq @apply_x
+    beq @done
     dec vel_x
 
     ; NOTE: vel_x is zero if both 01 and 10 are pressed
+@done:
+    rts
 
-@apply_x:
+update_x:
+    ; Propose X without reading input or changing velocity.
     lda pos_x
     sta next_x
 
@@ -191,7 +198,7 @@ update_camera:
     ;
     ; @apply_accel
 
-update_y:
+set_velocity_y:
     ; Is velocity upward?
     lda vel_y+1
     bpl @jump_down      ; minus is up!
@@ -261,7 +268,10 @@ update_y:
     inc vel_y+1
 :
 
-    ;; Update free-motion position
+    rts
+
+update_y:
+    ; Propose Y without changing velocity or applying gravity again.
     clc
     ; Subpixel
     lda pos_y

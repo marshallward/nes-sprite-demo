@@ -790,6 +790,8 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.position(124, 183, fraction=200)
         self.velocity(256)
         self.put("buttons", RIGHT)
+        self.call("set_velocity_x")
+        self.call("set_velocity_y")
         self.call("update_x")
         self.call("update_y")
         self.assertEqual(self.get("pos_x"), 124)
@@ -804,6 +806,41 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.assertEqual(self.get("pos_x"), 124)
         self.assertEqual(self.get("pos_y", 1), 183)
         self.assertEqual(self.get("pos_y"), 200)
+
+    def test_velocity_selection_does_not_propose_or_commit_position(self):
+        self.position(124, 120, fraction=200)
+        self.put("next_x", 17)
+        self.put("next_y", 18)
+        self.put("next_y", 19, 1)
+        self.put("buttons", RIGHT)
+        self.velocity(256)
+        self.call("set_velocity_x")
+        self.call("set_velocity_y")
+        self.assertEqual(self.get("vel_x"), 1)
+        self.assertEqual(self.get("vel_y"), 60)
+        self.assertEqual(self.get("vel_y", 1), 1)
+        self.assertEqual(self.get("next_x"), 17)
+        self.assertEqual(self.get("next_y"), 18)
+        self.assertEqual(self.get("next_y", 1), 19)
+        self.assertEqual(self.get("pos_x"), 124)
+        self.assertEqual(self.get("pos_y"), 200)
+        self.assertEqual(self.get("pos_y", 1), 120)
+
+    def test_position_proposals_use_velocity_not_buttons(self):
+        for velocity_x in (-8, 0, 8):
+            with self.subTest(velocity_x=velocity_x):
+                self.position(124, 120, fraction=200)
+                self.put("buttons", JUMP | LEFT)
+                self.put("vel_x", velocity_x)
+                self.velocity(0)
+                self.call("update_x")
+                self.call("update_y")
+                self.assertEqual(self.get("next_x"), 124+velocity_x)
+                self.assertEqual(self.get("next_y"), 200)
+                self.assertEqual(self.get("next_y", 1), 120)
+                self.assertEqual(self.get("vel_x"), velocity_x & 255)
+                self.assertEqual(self.get("vel_y"), 0)
+                self.assertEqual(self.get("vel_y", 1), 0)
 
     def test_camera_follows_committed_x_with_existing_wrap_rules(self):
         for x, camera, buttons, expected_x, expected_camera, expected_nt in (

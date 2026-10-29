@@ -19,7 +19,8 @@ read_dash:
 
 * Returns zero otherwise. Holding a direction never counts as another press.
 
-* An opposite press starts a new pair; both directions together cancel the pair.
+* An opposite press starts a new pair; both directions together cancel the
+  pair.
 
 * A completed pair is consumed. A and B do not affect detection.
 
@@ -27,6 +28,17 @@ update_move deliberately ignores the return value for now. Input detection has
 no ground/air rules yet; those belong to dash eligibility, not the gesture.
 
 Build with make, then run python3 tools/test_dash_input.py (requires py65).
+
+Step 2: separate velocity rules from position proposals
+-----------------------------------------------------
+
+update_move now calls set_velocity_x and set_velocity_y before update_x and
+update_y. The velocity routines contain the existing walking, jump and gravity
+rules. The position routines only compute next = position + velocity; they do
+not read buttons or apply acceleration. Collision and commit are unchanged.
+
+This is a behavior-preserving split, not a dash burst yet. Dash can later
+select different velocity rules while sharing the position and collision code.
 
 Next review steps, each kept separate:
 
