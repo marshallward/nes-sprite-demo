@@ -1,22 +1,62 @@
 ; Dash input: two distinct presses of the same horizontal direction.
 .importzp buttons, buttons_prev
 .export init_dash, read_dash
+.export update_dash, stop_dash
+.exportzp dash_timer, dash_velocity
 
 DASH_TAP_WINDOW = 12
+DASH_SPEED = 8
+DASH_FRAMES = 8
 
 .segment "ZEROPAGE"
     dash_tap_direction: .res 1
         ; first tap: Right=1, Left=2
     dash_tap_timer: .res 1
         ; remaining updates for the second press
+    dash_timer: .res 1       ; burst updates remaining after this update
+    dash_velocity: .res 1   ; this update's signed burst speed, or zero
 
 .setcpu "6502"
 .segment "CODE"
 
 init_dash:
     lda #0
+    sta dash_timer
+    sta dash_velocity
     sta dash_tap_direction
     sta dash_tap_timer
+    rts
+
+; Publish this update's burst speed and age the timer here. Keep the speed on
+; the final update even when the countdown reaches zero.
+update_dash:
+    lda dash_timer
+    bne @active
+    lda #0
+    sta dash_velocity
+    jsr read_dash
+    beq @inactive
+    bmi @left
+    lda #DASH_SPEED
+    bne @start
+@left:
+    lda #<-DASH_SPEED
+@start:
+    sta dash_velocity
+    lda #DASH_FRAMES
+    sta dash_timer
+@active:
+    lda #0
+    sta dash_tap_direction
+    sta dash_tap_timer
+    dec dash_timer
+@inactive:
+    rts
+
+stop_dash:
+    lda #0
+    sta dash_timer
+    sta dash_velocity
     rts
 
 read_dash:

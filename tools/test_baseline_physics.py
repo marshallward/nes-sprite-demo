@@ -817,7 +817,8 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.call("set_velocity_x")
         self.call("set_velocity_y")
         self.assertEqual(self.get("vel_x"), 1)
-        self.assertEqual(self.get("vel_y"), 60)
+        self.assertEqual(self.get("acc_y"), 60)
+        self.assertEqual(self.get("vel_y"), 0)
         self.assertEqual(self.get("vel_y", 1), 1)
         self.assertEqual(self.get("next_x"), 17)
         self.assertEqual(self.get("next_y"), 18)
@@ -826,20 +827,21 @@ class BaselinePhysicsTests(unittest.TestCase):
         self.assertEqual(self.get("pos_y"), 200)
         self.assertEqual(self.get("pos_y", 1), 120)
 
-    def test_position_proposals_use_velocity_not_buttons(self):
+    def test_integration_uses_motion_inputs_not_buttons(self):
         for velocity_x in (-8, 0, 8):
             with self.subTest(velocity_x=velocity_x):
                 self.position(124, 120, fraction=200)
                 self.put("buttons", JUMP | LEFT)
                 self.put("vel_x", velocity_x)
                 self.velocity(0)
+                self.put("acc_y", 60)
                 self.call("update_x")
                 self.call("update_y")
                 self.assertEqual(self.get("next_x"), 124+velocity_x)
-                self.assertEqual(self.get("next_y"), 200)
-                self.assertEqual(self.get("next_y", 1), 120)
+                self.assertEqual(self.get("next_y"), 4)
+                self.assertEqual(self.get("next_y", 1), 121)
                 self.assertEqual(self.get("vel_x"), velocity_x & 255)
-                self.assertEqual(self.get("vel_y"), 0)
+                self.assertEqual(self.get("vel_y"), 60)
                 self.assertEqual(self.get("vel_y", 1), 0)
 
     def test_camera_follows_committed_x_with_existing_wrap_rules(self):
@@ -853,6 +855,8 @@ class BaselinePhysicsTests(unittest.TestCase):
             (159, 255, RIGHT, 160, 0, 1),
         ):
             with self.subTest(x=x, camera=camera, buttons=buttons):
+                self.call("init_move")
+                self.put("buttons", 0)
                 self.position(x, 160)
                 self.put("camera_x", camera)
                 self.put("ntable", 0)

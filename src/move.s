@@ -14,7 +14,8 @@
 .importzp buttons
 
 .import apply_platform_collision
-.import init_dash, read_dash
+.import init_dash, update_dash, stop_dash
+.importzp dash_velocity
 
 .export init_move
 .export update_move
@@ -25,7 +26,7 @@
 
 ; These variables define movement state, and could be passed as inputs.
 .segment "ZEROPAGE"
-    ; Signed pixels/frame. Currently fixed to -1, 0, or 1.
+    ; Signed pixels/frame: walking or fixed-speed burst.
     vel_x: .res 1
 
     ; x_pos precompute, to check if a wall has been crossed.
@@ -71,17 +72,21 @@ init_move:
 
 
 update_move:
-    ; First dash step: track taps, but don't act on the result yet.
-    jsr read_dash
+    ; Forcing and impluse
+    jsr update_dash
+
+    ; Update velocity
     jsr set_velocity_x
     jsr set_velocity_y
 
-    ; Propose movement using the selected velocities, then resolve contacts.
+    ; Integrate motion
     jsr update_x
     jsr update_y
+
+    ; Apply contact forces
     jsr apply_move_collision
 
-    ; Commit the corrected proposal only after collision has used old position.
+    ; Apply collision-corrected positions
     lda next_x
     sta pos_x
     lda next_y
@@ -89,10 +94,17 @@ update_move:
     lda next_y+1
     sta pos_y+1
 
+    ; Adjust camera based on updated positions
     jmp update_camera
 
 
 set_velocity_x:
+    ; Motion setup: prescribe horizontal speed from burst state or buttons.
+    lda dash_velocity
+    beq @walk
+    sta vel_x
+    rts
+@walk:
     lda #0
     sta vel_x
 
@@ -199,6 +211,19 @@ update_camera:
     ; @apply_accel
 
 set_velocity_y:
+    ; Motion setup: select gravity and apply instantaneous velocity changes.
+    ; Acceleration is integrated later by update_y, regardless of its source.
+    lda dash_velocity
+    beq @ordinary
+    lda #0
+    sta vel_y
+    sta vel_y+1
+    sta acc_y
+    ; Suspended vertical speed must not permit a midair jump afterward.
+    lda #1
+    sta jump_latch
+    rts
+@ordinary:
     ; Is velocity upward?
     lda vel_y+1
     bpl @jump_down      ; minus is up!
@@ -254,10 +279,11 @@ set_velocity_y:
     sta jump_latch
 
 @jump_end:
-    ; Jump acceleration and impulse force complete.
+    rts
 
-@apply_accel:
-    ;; Update velocity
+update_y:
+    ; Integrate acceleration, then propose Y using the resulting velocity.
+    ; No input or dash rules belong in this step.
     clc
     ; Subpixel
     lda vel_y
@@ -268,10 +294,6 @@ set_velocity_y:
     inc vel_y+1
 :
 
-    rts
-
-update_y:
-    ; Propose Y without changing velocity or applying gravity again.
     clc
     ; Subpixel
     lda pos_y
@@ -345,6 +367,7 @@ apply_move_collision:
     sta next_x
     lda #0
     sta vel_x
+    jsr stop_dash
 @check_floor:
     ; Correct integer Y only; preserve the proposed fractional byte in next_y.
     lda hit_y
@@ -356,6 +379,7 @@ apply_move_collision:
     sta vel_y
     sta vel_y+1
     sta acc_y
+    jsr stop_dash
     lda buttons
     and #%10000000
     bne @skip_ground

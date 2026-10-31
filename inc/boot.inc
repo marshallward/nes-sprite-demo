@@ -4,7 +4,7 @@
 .macro INITIALIZE_NES
     ; Disable maskable CPU interrupts
     ;sei
-    ; NOTE: The 2A03 sets (I) on both power cycle and reset, so not needed.
+    ; NOTE: The 2A03 already sets (I) on both power cycle and reset.
 
     ; Disable BCD arithmetic
     ;cld

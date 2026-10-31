@@ -1,13 +1,12 @@
-Dash reimplementation — step 1: input only
-=========================================
+Dash reimplementation
+====================
 
-No burst movement yet. Walking, jumping, slopes and camera behavior are
-unchanged.  Spikes and subpixel horizontal movement are not included.
+Basic timed bursts share the ordinary movement pipeline. Spikes and
+subpixel horizontal movement are not included.
 
-src/dash.s owns two bytes: first-tap direction and a countdown. Previous button
-state belongs to src/pad.s (buttons_prev). init_move resets the tap state
-through init_dash; update_move calls read_dash once per update, before ordinary
-movement.
+src/dash.s owns tap direction/timer and burst velocity/timer.
+Previous button state belongs to src/pad.s (buttons_prev). init_move
+resets dash state through init_dash.
 
 read_dash:
 
@@ -24,29 +23,45 @@ read_dash:
 
 * A completed pair is consumed. A and B do not affect detection.
 
-update_move deliberately ignores the return value for now. Input detection has
-no ground/air rules yet; those belong to dash eligibility, not the gesture.
+There are no ground/air eligibility rules at this stage.
 
 Build with make, then run python3 tools/test_dash_input.py (requires py65).
 
-Step 2: separate velocity rules from position proposals
------------------------------------------------------
+Shared movement pipeline
+------------------------
 
-update_move now calls set_velocity_x and set_velocity_y before update_x and
-update_y. The velocity routines contain the existing walking, jump and gravity
-rules. The position routines only compute next = position + velocity; they do
-not read buttons or apply acceleration. Collision and commit are unchanged.
+update_move calls update_dash, set_velocity_x, set_velocity_y,
+update_x, update_y, collision resolution, commit, and camera update.
+There is no separate dash movement path.
 
-This is a behavior-preserving split, not a dash burst yet. Dash can later
-select different velocity rules while sharing the position and collision code.
+set_velocity_x selects stored burst speed or ordinary walking input.
+set_velocity_y selects vertical acceleration and applies jump impulses. During
+a burst it selects vy = 0 and ay = 0. It does not integrate acceleration.
+update_y always computes vy += ay, then next_y = y + vy; update_x computes
+next_x = x + vx. Neither integration routine reads buttons or dash state.
 
-Next review steps, each kept separate:
+Burst state and contacts
+------------------------
 
-1. A basic air burst: fixed horizontal direction/duration and suspended
-   gravity.
+update_dash consumes read_dash's direction to start an 8-update burst at
+8 pixels/update. update_dash owns the countdown and publishes dash_velocity
+as this update's burst speed (zero when inactive). Both velocity routines use
+that speed as the active flag. On the final burst update the timer reaches zero
+but the published speed remains nonzero until the next update or cancellation.
+The starting update counts toward the duration; gravity resumes next update.
+The jump latch prevents the zero vertical velocity from enabling a midair jump.
+Input during a burst is discarded rather than queued.
 
-2. Safe movement substeps, wall/floor cancellation and world boundaries.
+* Floor contact cancels a burst, including contact with an existing support.
+* Walls stop horizontal movement and cancel the burst.
+* Another double-tap can start another burst in the same airtime.
+* Jump input is suppressed during bursts; normal jump rules resume afterward.
 
-3. One dash per airtime, landing recharge and jump-latch interactions.
+Build with make, then run tools/test_dash_input.py and
+tools/test_baseline_physics.py with Python and py65 installed.
 
-4. Surface bursts and their slope/edge/jump behavior.
+Remaining review steps, each kept separate:
+
+1. Safe movement substeps and world boundaries at burst speed.
+2. One air dash per airtime, landing recharge, and ledge consumption.
+3. Ground bursts, slope-following, and jumping out of ground bursts.

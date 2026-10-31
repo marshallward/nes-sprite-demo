@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Double-tap detection only; movement must remain unchanged at this stage."""
+"""Double-tap detection and its integration with burst movement."""
 import unittest
 
 import test_baseline_physics as physics
@@ -87,14 +87,38 @@ class DashInputTests(unittest.TestCase):
         self.assertEqual(m.get("buttons_prev"), JUMP)
         self.assertEqual(m.get("buttons"), JUMP | RIGHT)
 
-    def test_movement_still_walks_on_double_tap(self):
+    def test_movement_bursts_on_double_tap(self):
         m = self.machine
-        m.platforms((0, 255, 192))
-        m.position(80, 184)
-        for buttons, x in ((RIGHT, 81), (0, 81), (RIGHT, 82)):
+        m.platform_records()
+        m.position(80, 100)
+        speed = m.symbols["DASH_SPEED"]
+        for buttons, x in ((RIGHT, 81), (0, 81), (RIGHT, 81+speed)):
             m.frame(buttons)
             self.assertEqual(m.get("pos_x"), x)
-            self.assertEqual(m.get("pos_y", 1), 184)
+
+    def test_burst_duration_direction_and_gravity_resume(self):
+        m = self.machine
+        for direction, sign in ((RIGHT, 1), (LEFT, -1)):
+            with self.subTest(direction=direction):
+                m.call("init_move")
+                m.put("buttons", 0)
+                m.platform_records()
+                m.position(100, 100)
+                m.frame(direction)
+                m.frame()
+                x, y, fraction = m.get("pos_x"), m.get("pos_y", 1), m.get("pos_y")
+                m.velocity(-512)
+                duration = m.symbols["DASH_FRAMES"]
+                for step in range(1, duration+1):
+                    m.frame(direction if step == 1 else LEFT | RIGHT | JUMP)
+                    self.assertEqual(m.get("pos_x"), x+sign*m.symbols["DASH_SPEED"]*step)
+                    self.assertEqual(m.get("pos_y", 1), y)
+                    self.assertEqual(m.get("pos_y"), fraction)
+                    self.assertEqual(m.get("dash_timer"), duration-step)
+                m.frame(JUMP)
+                self.assertEqual(m.get("vel_x"), 0)
+                self.assertEqual(m.get("vel_y"), 60)
+                self.assertEqual(m.get("vel_y", 1), 0)
 
 
 if __name__ == "__main__":
