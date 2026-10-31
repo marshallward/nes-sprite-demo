@@ -72,7 +72,7 @@ init_move:
 
 
 update_move:
-    ; Forcing and impluse
+    ; Get the dash state (as dash_velocity)
     jsr update_dash
 
     ; Update velocity
@@ -99,7 +99,8 @@ update_move:
 
 
 set_velocity_x:
-    ; Motion setup: prescribe horizontal speed from burst state or buttons.
+    ; Currently selects either dash or walk velocity.
+    ; Eventually this might be a consolidation of effects.
     lda dash_velocity
     beq @walk
     sta vel_x
@@ -122,58 +123,6 @@ set_velocity_x:
 
     ; NOTE: vel_x is zero if both 01 and 10 are pressed
 @done:
-    rts
-
-update_x:
-    ; Propose X without reading input or changing velocity.
-    lda pos_x
-    sta next_x
-
-    lda vel_x
-    beq @end_x
-
-    clc
-    lda next_x
-    adc vel_x
-    sta next_x
-@end_x:
-    rts
-
-update_camera:
-    ; Catch up toward the frame even when the player is stationary.
-    lda pos_x
-    sec
-    sbc camera_x
-    cmp #X_FRAME_MAX+1
-    bcs @scroll_right
-
-    cmp #X_FRAME_MIN
-    bcc @scroll_left
-
-    rts
-
-@scroll_right:
-    clc
-    lda camera_x
-    adc #1
-    sta camera_x
-    bcc @end_x
-    lda ntable
-    eor #1
-    sta ntable
-    rts
-
-@scroll_left:
-    sec
-    lda camera_x
-    sbc #1
-    sta camera_x
-    bcs @end_x
-    lda ntable
-    eor #1
-    sta ntable
-
-@end_x:
     rts
 
     ;; Jump kinematics
@@ -209,6 +158,7 @@ update_camera:
     ;     latch = 1
     ;
     ; @apply_accel
+
 
 set_velocity_y:
     ; Motion setup: select gravity and apply instantaneous velocity changes.
@@ -281,9 +231,27 @@ set_velocity_y:
 @jump_end:
     rts
 
+
+; Movement integration (symplectic Euler)
+;   v(f+1) = v(f) + a(f)
+;   x(f+1) = x(f) + v(f+1)
+
+update_x:
+    lda pos_x
+    sta next_x
+
+    lda vel_x
+    beq @end_x
+
+    clc
+    lda next_x
+    adc vel_x
+    sta next_x
+@end_x:
+    rts
+
+
 update_y:
-    ; Integrate acceleration, then propose Y using the resulting velocity.
-    ; No input or dash rules belong in this step.
     clc
     ; Subpixel
     lda vel_y
@@ -387,4 +355,42 @@ apply_move_collision:
     sta jump_latch
 
 @skip_ground:
+    rts
+
+
+update_camera:
+    ; Catch up toward the frame even when the player is stationary.
+    lda pos_x
+    sec
+    sbc camera_x
+    cmp #X_FRAME_MAX+1
+    bcs @scroll_right
+
+    cmp #X_FRAME_MIN
+    bcc @scroll_left
+
+    rts
+
+@scroll_right:
+    clc
+    lda camera_x
+    adc #1
+    sta camera_x
+    bcc @end_x
+    lda ntable
+    eor #1
+    sta ntable
+    rts
+
+@scroll_left:
+    sec
+    lda camera_x
+    sbc #1
+    sta camera_x
+    bcs @end_x
+    lda ntable
+    eor #1
+    sta ntable
+
+@end_x:
     rts
